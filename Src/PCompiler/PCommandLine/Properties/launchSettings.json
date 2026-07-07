@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "P Compile": {
+      "commandName": "Project",
+      "commandLineArgs": "compile",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\motivating-examples"
+    },
+    "P Check": {
+      "commandName": "Project",
+      "commandLineArgs": "check -tc tcSubseq1 --sch-monitorguided",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\motivating-examples"
+    }
+  }
+}

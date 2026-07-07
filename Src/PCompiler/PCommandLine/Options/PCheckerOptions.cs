@@ -89,7 +89,8 @@ namespace Plang.Options
             schedulingGroup.AddArgument("sch-pos", null, "Choose the POS scheduling strategy", typeof(bool));
             schedulingGroup.AddArgument("sch-fairpct", null, "Choose the fair PCT scheduling strategy with given maximum number of priority switch points", typeof(uint));
             schedulingGroup.AddArgument("sch-rl", null, "Choose the reinforcement learning (RL) scheduling strategy", typeof(bool)).IsHidden = true;
-            
+            schedulingGroup.AddArgument("sch-monitorguided", null, "Choose the random scheduling strategy with monitor guidance", typeof(bool));
+
             var schPEx = schedulingGroup.AddArgument("sch-pex", null, "Choose the scheduling strategy for PEx mode (options: random, dfs). (default: random)");
             schPEx.AllowedValues = new List<string>() { "random", "dfs", "astar" };
 
@@ -220,6 +221,7 @@ namespace Plang.Options
                 case "sch-pos":
                 case "sch-feedbackpos":
                 case "sch-feedback":
+                case "sch-monitorguided":
                     checkerConfiguration.SchedulingStrategy = option.LongName.Substring(4);
                     break;
                 case "sch-probabilistic":
@@ -344,7 +346,8 @@ namespace Plang.Options
                 checkerConfiguration.SchedulingStrategy != "learn" &&
                 checkerConfiguration.SchedulingStrategy != "dfs" &&
                 checkerConfiguration.SchedulingStrategy != "stateless" &&
-                checkerConfiguration.SchedulingStrategy != "astar")
+                checkerConfiguration.SchedulingStrategy != "astar" &&
+                checkerConfiguration.SchedulingStrategy != "monitorguided")
             {
                 Error.CheckerReportAndExit("Please provide a scheduling strategy (see --sch* options)");
             }
