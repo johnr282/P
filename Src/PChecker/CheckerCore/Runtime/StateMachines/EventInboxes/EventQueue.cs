@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using PChecker.Runtime.Events;
 using PChecker.Runtime.StateMachines.Managers;
 
-namespace PChecker.Runtime.StateMachines.EventQueues
+namespace PChecker.Runtime.StateMachines.EventInboxes
 {
     /// <summary>
     /// Implements a queue of events that is used during testing.

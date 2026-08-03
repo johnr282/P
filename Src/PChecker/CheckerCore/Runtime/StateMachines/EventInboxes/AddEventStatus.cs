@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-namespace PChecker.Runtime.StateMachines.EventQueues
+namespace PChecker.Runtime.StateMachines.EventInboxes
 {
     /// <summary>
     /// The status returned as the result of an enqueue operation.

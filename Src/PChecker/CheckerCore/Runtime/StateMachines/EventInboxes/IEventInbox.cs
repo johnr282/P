@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using PChecker.Runtime.Events;
 
-namespace PChecker.Runtime.StateMachines.EventQueues
+namespace PChecker.Runtime.StateMachines.EventInboxes
 {
     /// <summary>
     /// Interface of a queue of events.

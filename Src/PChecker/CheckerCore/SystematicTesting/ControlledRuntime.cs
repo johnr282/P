@@ -18,7 +18,7 @@ using PChecker.Random;
 using PChecker.Runtime.Events;
 using PChecker.Runtime.Logging;
 using PChecker.Runtime.StateMachines;
-using PChecker.Runtime.StateMachines.EventQueues;
+using PChecker.Runtime.StateMachines.EventInboxes;
 using PChecker.Runtime.StateMachines.Exceptions;
 using PChecker.Runtime.StateMachines.Managers;
 using PChecker.SystematicTesting.Operations;

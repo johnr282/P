@@ -15,7 +15,7 @@ using PChecker.IO.Debugging;
 using PChecker.Runtime.Events;
 using PChecker.Runtime.Exceptions;
 using PChecker.Runtime.Logging;
-using PChecker.Runtime.StateMachines.EventQueues;
+using PChecker.Runtime.StateMachines.EventInboxes;
 using PChecker.Runtime.StateMachines.Exceptions;
 using PChecker.Runtime.StateMachines.Handlers;
 using PChecker.Runtime.StateMachines.Managers;
