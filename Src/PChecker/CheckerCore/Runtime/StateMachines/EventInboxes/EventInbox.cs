@@ -95,6 +95,9 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
             return AddEventStatus.EventHandlerRunning;
         }
 
+        /// <summary>
+        /// Adds the specified event and its optional metadata to the inbox.
+        /// </summary>
         protected abstract void AddEventToInbox(Event e, EventInfo info);
 
         /// <inheritdoc/>

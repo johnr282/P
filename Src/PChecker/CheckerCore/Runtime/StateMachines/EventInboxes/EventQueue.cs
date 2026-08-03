@@ -28,11 +28,13 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
             Queue = new LinkedList<(Event, EventInfo)>();
         }
 
+        /// <inheritdoc/>
         protected override void AddEventToInbox(Event e, EventInfo info)
         {
             Queue.AddLast((e, info));
         }
 
+        /// <inheritdoc/>
         protected override IEnumerable<(Event e, EventInfo info)> GetEnabledEventsFromInbox(bool checkOnly = false)
         {
             HashSet<(Event e, EventInfo info)> events = new();
@@ -92,6 +94,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
             Queue.Remove((e, info));
         }
 
+        /// <inheritdoc/>
         protected override (Event e, EventInfo info) FindReceivedEvent(Dictionary<Type, Func<Event, bool>> eventWaitTypes)
         {
             (Event e, EventInfo info) receivedEvent = default;
@@ -102,6 +105,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
                 if (IsWaitedEvent(node.Value.e, eventWaitTypes))
                 {
                     receivedEvent = node.Value;
+                    // TODO: Should this node be removed?
                     Queue.Remove(node);
                     break;
                 }
@@ -112,11 +116,13 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
             return receivedEvent;
         }
 
+        /// <inheritdoc/>
         protected override void ClearInbox()
         {
             Queue.Clear();
         }
 
+        /// <inheritdoc/>
         protected override IEnumerable<(Event e, EventInfo info)> GetInboxEvents()
         {
             return Queue;
