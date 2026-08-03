@@ -9,7 +9,7 @@ using PChecker.Runtime.Events;
 namespace PChecker.Runtime.StateMachines.EventInboxes
 {
     /// <summary>
-    /// Interface of a queue of events.
+    /// Interface of an event inbox.
     /// </summary>
     internal interface IEventInbox : IDisposable
     {

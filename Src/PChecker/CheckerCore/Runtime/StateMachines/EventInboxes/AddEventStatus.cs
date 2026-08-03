@@ -4,7 +4,7 @@
 namespace PChecker.Runtime.StateMachines.EventInboxes
 {
     /// <summary>
-    /// The status returned as the result of an enqueue operation.
+    /// The status returned as the result of an add event operation.
     /// </summary>
     internal enum AddEventStatus
     {
@@ -24,9 +24,9 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         Received,
 
         /// <summary>
-        /// There is no next event available to dequeue and handle.
+        /// There are no events available to handle.
         /// </summary>
-        NextEventUnavailable,
+        NoEventsAvailable,
 
         /// <summary>
         /// The event was dropped.

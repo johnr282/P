@@ -12,162 +12,43 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
     /// <summary>
     /// Implements a queue of events that is used during testing.
     /// </summary>
-    internal sealed class EventQueue : IEventInbox
+    internal sealed class EventQueue : EventInbox
     {
-        /// <summary>
-        /// Manages the state machine that owns this queue.
-        /// </summary>
-        private readonly IStateMachineManager StateMachineManager;
-
-        /// <summary>
-        /// The state machine that owns this queue.
-        /// </summary>
-        private readonly StateMachine StateMachine;
-
         /// <summary>
         /// The internal queue that contains events with their metadata.
         /// </summary>
         private readonly LinkedList<(Event e, EventInfo info)> Queue;
 
         /// <summary>
-        /// The raised event and its metadata, or null if no event has been raised.
-        /// </summary>
-        private (Event e, EventInfo info) RaisedEvent;
-
-        /// <summary>
-        /// Map from the types of events that the owner of the queue is waiting to receive
-        /// to an optional predicate. If an event of one of these types is enqueued, then
-        /// if there is no predicate, or if there is a predicate and evaluates to true, then
-        /// the event is received, else the event is deferred.
-        /// </summary>
-        private Dictionary<Type, Func<Event, bool>> EventWaitTypes;
-
-        /// <summary>
-        /// Task completion source that contains the event obtained using an explicit receive.
-        /// </summary>
-        private TaskCompletionSource<Event> ReceiveCompletionSource;
-
-        /// <summary>
-        /// Checks if the queue is accepting new events.
-        /// </summary>
-        private bool IsClosed;
-
-        /// <summary>
-        /// The size of the queue.
-        /// </summary>
-        public int Size => Queue.Count;
-
-        /// <summary>
-        /// Checks if an event has been raised.
-        /// </summary>
-        public bool IsEventRaised => RaisedEvent != default;
-
-        /// <summary>
         /// Initializes a new instance of the <see cref="EventQueue"/> class.
         /// </summary>
         internal EventQueue(IStateMachineManager stateMachineManager, StateMachine stateMachine)
+            : base(stateMachineManager, stateMachine)
         {
-            StateMachineManager = stateMachineManager;
-            StateMachine = stateMachine;
             Queue = new LinkedList<(Event, EventInfo)>();
-            EventWaitTypes = new Dictionary<Type, Func<Event, bool>>();
-            IsClosed = false;
         }
 
-        /// <inheritdoc/>
-        public AddEventStatus AddEvent(Event e, EventInfo info)
+        protected override void AddEventToInbox(Event e, EventInfo info)
         {
-            if (IsClosed)
-            {
-                return AddEventStatus.Dropped;
-            }
-
-            if (EventWaitTypes.TryGetValue(e.GetType(), out var predicate) &&
-                (predicate is null || predicate(e)))
-            {
-                EventWaitTypes.Clear();
-                StateMachineManager.OnReceiveEvent(e, info);
-                ReceiveCompletionSource.SetResult(e);
-                return AddEventStatus.EventHandlerRunning;
-            }
-
-            StateMachineManager.OnEnqueueEvent(e, info);
             Queue.AddLast((e, info));
-
-            if (!StateMachineManager.IsEventHandlerRunning)
-            {
-                // TODO: Use GetEnabledEvents() here
-                if (GetNextEvent(true).e is null)
-                {
-                    return AddEventStatus.NextEventUnavailable;
-                }
-
-                StateMachineManager.IsEventHandlerRunning = true;
-                return AddEventStatus.EventHandlerNotRunning;
-            }
-
-            return AddEventStatus.EventHandlerRunning;
         }
 
-        public (EnabledEventsStatus status, IEnumerable<(Event e, EventInfo info)> events) GetEnabledEvents()
+        protected override IEnumerable<(Event e, EventInfo info)> GetEnabledEventsFromInbox(bool checkOnly = false)
         {
             HashSet<(Event e, EventInfo info)> events = new();
-            
-            // Try to get the raised event, if there is one. Raised events
-            // have priority over the events in the inbox.
-            if (RaisedEvent != default)
+            (Event, EventInfo) nextEvent = TryDequeueEvent(checkOnly);
+            if (nextEvent != default)
             {
-                if (StateMachineManager.IsEventIgnored(RaisedEvent.e, RaisedEvent.info))
-                {
-                    // TODO: should the user be able to raise an ignored event?
-                    // The raised event is ignored in the current state.
-                    RaisedEvent = default;
-                }
-                else
-                {
-                    var raisedEvent = RaisedEvent;
-                    RaisedEvent = default;
-                    events.Add(raisedEvent);
-                    return (EnabledEventsStatus.Raised, events);
-                }
+                events.Add(nextEvent);
             }
 
-            var hasDefaultHandler = StateMachineManager.IsDefaultHandlerAvailable();
-            if (hasDefaultHandler)
-            {
-                StateMachine.Runtime.NotifyDefaultEventHandlerCheck(StateMachine);
-            }
-
-            // Try to dequeue the next event, if there is one.
-            var (e, info) = GetNextEvent();
-            if (e != null)
-            {
-                // Found next event that can be dequeued.
-                events.Add((e, info));
-                return (EnabledEventsStatus.Success, events);
-            }
-
-            // No event can be dequeued, so check if there is a default event handler.
-            if (!hasDefaultHandler)
-            {
-                // There is no default event handler installed, so do not return an event.
-                StateMachineManager.IsEventHandlerRunning = false;
-                return (EnabledEventsStatus.NotAvailable, events);
-            }
-
-            // TODO: check op-id of default event.
-            // A default event handler exists.
-            var stateName = StateMachine.CurrentState.GetType().Name;
-            var eventOrigin = new EventOriginInfo(StateMachine.Id, StateMachine.GetType().FullName, stateName);
-            events.Add((DefaultEvent.Instance, 
-                new EventInfo(DefaultEvent.Instance, eventOrigin, StateMachine.VectorTime)));
-            return (EnabledEventsStatus.Default, events);
+            return events;
         }
 
         /// <summary>
-        /// Returns the next event in the queue and its metadata, if there is one available, else returns null.
+        /// Dequeues the next event and its metadata, if there is one available, else returns null.
         /// </summary>
-        private (Event e, EventInfo info) GetNextEvent(bool checkOnly = false)
+        private (Event e, EventInfo info) TryDequeueEvent(bool checkOnly)
         {
             (Event, EventInfo) nextAvailableEvent = default;
 
@@ -178,7 +59,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
                 var nextNode = node.Next;
                 var currentEvent = node.Value;
 
-                if (StateMachineManager.IsEventIgnored(currentEvent.e, currentEvent.info))
+                if (IsEventIgnored(currentEvent.e, currentEvent.info))
                 {
                     if (!checkOnly)
                     {
@@ -191,14 +72,11 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
                 }
 
                 // Skips a deferred event.
-                if (!StateMachineManager.IsEventDeferred(currentEvent.e, currentEvent.info))
+                if (!IsEventDeferred(currentEvent.e, currentEvent.info))
                 {
+                    // Cannot remove event from queue yet; scheduler must choose to
+                    // execute it first
                     nextAvailableEvent = currentEvent;
-                    if (!checkOnly)
-                    {
-                        Queue.Remove(node);
-                    }
-
                     break;
                 }
 
@@ -209,70 +87,19 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         }
 
         /// <inheritdoc/>
-        public void Remove(Event e, EventInfo info)
+        public override void Remove(Event e, EventInfo info)
         {
             Queue.Remove((e, info));
         }
 
-        /// <inheritdoc/>
-        public void RaiseEvent(Event e)
+        protected override (Event e, EventInfo info) FindReceivedEvent(Dictionary<Type, Func<Event, bool>> eventWaitTypes)
         {
-            var stateName = StateMachine.CurrentState.GetType().Name;
-            var eventOrigin = new EventOriginInfo(StateMachine.Id, StateMachine.GetType().FullName, stateName);
-            var info = new EventInfo(e, eventOrigin, StateMachine.VectorTime);
-            RaisedEvent = (e, info);
-            StateMachineManager.OnRaiseEvent(e, info);
-        }
-
-        /// <inheritdoc/>
-        public Task<Event> ReceiveEventAsync(Type eventType, Func<Event, bool> predicate = null)
-        {
-            var eventWaitTypes = new Dictionary<Type, Func<Event, bool>>
-            {
-                { eventType, predicate }
-            };
-
-            return ReceiveEventAsync(eventWaitTypes);
-        }
-
-        /// <inheritdoc/>
-        public Task<Event> ReceiveEventAsync(params Type[] eventTypes)
-        {
-            var eventWaitTypes = new Dictionary<Type, Func<Event, bool>>();
-            foreach (var type in eventTypes)
-            {
-                eventWaitTypes.Add(type, null);
-            }
-
-            return ReceiveEventAsync(eventWaitTypes);
-        }
-
-        /// <inheritdoc/>
-        public Task<Event> ReceiveEventAsync(params Tuple<Type, Func<Event, bool>>[] events)
-        {
-            var eventWaitTypes = new Dictionary<Type, Func<Event, bool>>();
-            foreach (var e in events)
-            {
-                eventWaitTypes.Add(e.Item1, e.Item2);
-            }
-
-            return ReceiveEventAsync(eventWaitTypes);
-        }
-
-        /// <summary>
-        /// Waits for an event to be enqueued.
-        /// </summary>
-        private Task<Event> ReceiveEventAsync(Dictionary<Type, Func<Event, bool>> eventWaitTypes)
-        {
-            StateMachine.Runtime.NotifyReceiveCalled(StateMachine);
-
             (Event e, EventInfo info) receivedEvent = default;
             var node = Queue.First;
             while (node != null)
             {
                 // Dequeue the first event that the caller waits to receive, if there is one in the queue.
-                if (eventWaitTypes.TryGetValue(node.Value.e.GetType(), out var predicate) &&
-                    (predicate is null || predicate(node.Value.e)))
+                if (IsWaitedEvent(node.Value.e, eventWaitTypes))
                 {
                     receivedEvent = node.Value;
                     Queue.Remove(node);
@@ -282,62 +109,17 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
                 node = node.Next;
             }
 
-            if (receivedEvent == default)
-            {
-                ReceiveCompletionSource = new TaskCompletionSource<Event>();
-                EventWaitTypes = eventWaitTypes;
-                StateMachineManager.OnWaitEvent(EventWaitTypes.Keys);
-                return ReceiveCompletionSource.Task;
-            }
-
-            StateMachineManager.OnReceiveEventWithoutWaiting(receivedEvent.e, receivedEvent.info);
-            return Task.FromResult(receivedEvent.e);
+            return receivedEvent;
         }
 
-        /// <inheritdoc/>
-        public int GetCachedState()
+        protected override void ClearInbox()
         {
-            unchecked
-            {
-                var hash = 19;
-                foreach (var (_, info) in Queue)
-                {
-                    hash = (hash * 31) + info.EventName.GetHashCode();
-                }
-
-                return hash;
-            }
-        }
-
-        /// <inheritdoc/>
-        public void Close()
-        {
-            IsClosed = true;
-        }
-
-        /// <summary>
-        /// Disposes the queue resources.
-        /// </summary>
-        private void Dispose(bool disposing)
-        {
-            if (!disposing)
-            {
-                return;
-            }
-
-            foreach (var (e, info) in Queue)
-            {
-                StateMachineManager.OnDropEvent(e, info);
-            }
-
             Queue.Clear();
         }
 
-        /// <inheritdoc/>
-        public void Dispose()
+        protected override IEnumerable<(Event e, EventInfo info)> GetInboxEvents()
         {
-            Dispose(true);
-            GC.SuppressFinalize(this);
+            return Queue;
         }
     }
 }

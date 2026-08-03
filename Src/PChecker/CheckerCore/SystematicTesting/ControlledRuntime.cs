@@ -603,7 +603,7 @@ namespace PChecker.SystematicTesting
             // EnqueueStatus.EventHandlerNotRunning is not returned by EnqueueEvent
             // (even when the state machine was previously inactive) when the event e requires
             // no action by the state machine (i.e., it implicitly handles the event).
-            return enqueueStatus is AddEventStatus.Dropped || enqueueStatus is AddEventStatus.NextEventUnavailable;
+            return enqueueStatus is AddEventStatus.Dropped || enqueueStatus is AddEventStatus.NoEventsAvailable;
         }
 
         /// <summary>
