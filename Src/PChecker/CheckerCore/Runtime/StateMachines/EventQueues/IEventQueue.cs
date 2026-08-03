@@ -3,6 +3,7 @@
 
 using System;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using PChecker.Runtime.Events;
 
 namespace PChecker.Runtime.StateMachines.EventQueues
@@ -10,10 +11,10 @@ namespace PChecker.Runtime.StateMachines.EventQueues
     /// <summary>
     /// Interface of a queue of events.
     /// </summary>
-    internal interface IEventQueue : IDisposable
+    internal interface IEventInbox : IDisposable
     {
         /// <summary>
-        /// The size of the queue.
+        /// The size of the inbox.
         /// </summary>
         int Size { get; }
 
@@ -23,17 +24,22 @@ namespace PChecker.Runtime.StateMachines.EventQueues
         bool IsEventRaised { get; }
 
         /// <summary>
-        /// Enqueues the specified event and its optional metadata.
+        /// Adds the specified event and its optional metadata.
         /// </summary>
-        EnqueueStatus Enqueue(Event e, EventInfo info);
+        AddEventStatus AddEvent(Event e, EventInfo info);
 
         /// <summary>
-        /// Dequeues the next event, if there is one available.
+        /// Returns the currently enabled events in the inbox, along with their optional metadata.
         /// </summary>
-        (DequeueStatus status, Event e, EventInfo info) Dequeue();
+        (EnabledEventsStatus status, IEnumerable<(Event e, EventInfo info)> events) GetEnabledEvents();
 
         /// <summary>
-        /// Enqueues the specified raised event.
+        /// Removes the specified event with the specified metadata from the inbox.
+        /// </summary>
+        void Remove(Event e, EventInfo info);
+
+        /// <summary>
+        /// Adds the specified raised event.
         /// </summary>
         void RaiseEvent(Event e);
 
@@ -53,12 +59,12 @@ namespace PChecker.Runtime.StateMachines.EventQueues
         Task<Event> ReceiveEventAsync(params Tuple<Type, Func<Event, bool>>[] events);
 
         /// <summary>
-        /// Returns the cached state of the queue.
+        /// Returns the cached state of the inbox.
         /// </summary>
         int GetCachedState();
 
         /// <summary>
-        /// Closes the queue, which stops any further event enqueues.
+        /// Closes the inbox, which stops any further events from being added.
         /// </summary>
         void Close();
     }

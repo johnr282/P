@@ -4,27 +4,27 @@
 namespace PChecker.Runtime.StateMachines.EventQueues
 {
     /// <summary>
-    /// The status returned as the result of a dequeue operation.
+    /// The status of an event inbox's enabled events.
     /// </summary>
-    internal enum DequeueStatus
+    internal enum EnabledEventsStatus
     {
         /// <summary>
-        /// An event was successfully dequeued.
+        /// Standard events are enabled.
         /// </summary>
         Success = 0,
 
         /// <summary>
-        /// The raised event was dequeued.
+        /// Only the raised event is enabled.
         /// </summary>
         Raised,
 
         /// <summary>
-        /// The default event was dequeued.
+        /// Only the default event is enabled.
         /// </summary>
         Default,
 
         /// <summary>
-        /// No event available to dequeue.
+        /// No events are enabled.
         /// </summary>
         NotAvailable
     }

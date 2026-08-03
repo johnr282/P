@@ -12,7 +12,7 @@ namespace PChecker.Runtime.StateMachines.EventQueues
     /// <summary>
     /// Implements a queue of events that is used during testing.
     /// </summary>
-    internal sealed class EventQueue : IEventQueue
+    internal sealed class EventQueue : IEventInbox
     {
         /// <summary>
         /// Manages the state machine that owns this queue.
@@ -75,11 +75,11 @@ namespace PChecker.Runtime.StateMachines.EventQueues
         }
 
         /// <inheritdoc/>
-        public EnqueueStatus Enqueue(Event e, EventInfo info)
+        public AddEventStatus AddEvent(Event e, EventInfo info)
         {
             if (IsClosed)
             {
-                return EnqueueStatus.Dropped;
+                return AddEventStatus.Dropped;
             }
 
             if (EventWaitTypes.TryGetValue(e.GetType(), out var predicate) &&
@@ -88,7 +88,7 @@ namespace PChecker.Runtime.StateMachines.EventQueues
                 EventWaitTypes.Clear();
                 StateMachineManager.OnReceiveEvent(e, info);
                 ReceiveCompletionSource.SetResult(e);
-                return EnqueueStatus.EventHandlerRunning;
+                return AddEventStatus.EventHandlerRunning;
             }
 
             StateMachineManager.OnEnqueueEvent(e, info);
@@ -96,21 +96,23 @@ namespace PChecker.Runtime.StateMachines.EventQueues
 
             if (!StateMachineManager.IsEventHandlerRunning)
             {
-                if (TryDequeueEvent(true).e is null)
+                // TODO: Use GetEnabledEvents() here
+                if (GetNextEvent(true).e is null)
                 {
-                    return EnqueueStatus.NextEventUnavailable;
+                    return AddEventStatus.NextEventUnavailable;
                 }
 
                 StateMachineManager.IsEventHandlerRunning = true;
-                return EnqueueStatus.EventHandlerNotRunning;
+                return AddEventStatus.EventHandlerNotRunning;
             }
 
-            return EnqueueStatus.EventHandlerRunning;
+            return AddEventStatus.EventHandlerRunning;
         }
 
-        /// <inheritdoc/>
-        public (DequeueStatus status, Event e, EventInfo info) Dequeue()
+        public (EnabledEventsStatus status, IEnumerable<(Event e, EventInfo info)> events) GetEnabledEvents()
         {
+            HashSet<(Event e, EventInfo info)> events = new();
+            
             // Try to get the raised event, if there is one. Raised events
             // have priority over the events in the inbox.
             if (RaisedEvent != default)
@@ -125,7 +127,8 @@ namespace PChecker.Runtime.StateMachines.EventQueues
                 {
                     var raisedEvent = RaisedEvent;
                     RaisedEvent = default;
-                    return (DequeueStatus.Raised, raisedEvent.e, raisedEvent.info);
+                    events.Add(raisedEvent);
+                    return (EnabledEventsStatus.Raised, events);
                 }
             }
 
@@ -136,11 +139,12 @@ namespace PChecker.Runtime.StateMachines.EventQueues
             }
 
             // Try to dequeue the next event, if there is one.
-            var (e, info) = TryDequeueEvent();
+            var (e, info) = GetNextEvent();
             if (e != null)
             {
                 // Found next event that can be dequeued.
-                return (DequeueStatus.Success, e, info);
+                events.Add((e, info));
+                return (EnabledEventsStatus.Success, events);
             }
 
             // No event can be dequeued, so check if there is a default event handler.
@@ -148,20 +152,22 @@ namespace PChecker.Runtime.StateMachines.EventQueues
             {
                 // There is no default event handler installed, so do not return an event.
                 StateMachineManager.IsEventHandlerRunning = false;
-                return (DequeueStatus.NotAvailable, null, null);
+                return (EnabledEventsStatus.NotAvailable, events);
             }
 
             // TODO: check op-id of default event.
             // A default event handler exists.
             var stateName = StateMachine.CurrentState.GetType().Name;
             var eventOrigin = new EventOriginInfo(StateMachine.Id, StateMachine.GetType().FullName, stateName);
-            return (DequeueStatus.Default, DefaultEvent.Instance, new EventInfo(DefaultEvent.Instance, eventOrigin, StateMachine.VectorTime));
+            events.Add((DefaultEvent.Instance, 
+                new EventInfo(DefaultEvent.Instance, eventOrigin, StateMachine.VectorTime)));
+            return (EnabledEventsStatus.Default, events);
         }
 
         /// <summary>
-        /// Dequeues the next event and its metadata, if there is one available, else returns null.
+        /// Returns the next event in the queue and its metadata, if there is one available, else returns null.
         /// </summary>
-        private (Event e, EventInfo info) TryDequeueEvent(bool checkOnly = false)
+        private (Event e, EventInfo info) GetNextEvent(bool checkOnly = false)
         {
             (Event, EventInfo) nextAvailableEvent = default;
 
@@ -200,6 +206,12 @@ namespace PChecker.Runtime.StateMachines.EventQueues
             }
 
             return nextAvailableEvent;
+        }
+
+        /// <inheritdoc/>
+        public void Remove(Event e, EventInfo info)
+        {
+            Queue.Remove((e, info));
         }
 
         /// <inheritdoc/>

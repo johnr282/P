@@ -504,7 +504,7 @@ namespace PChecker.SystematicTesting
             var stateMachine = Create(type);
             IStateMachineManager stateMachineManager = new StateMachineManager(this, stateMachine);
 
-            IEventQueue eventQueue = new EventQueue(stateMachineManager, stateMachine);
+            IEventInbox eventQueue = new EventQueue(stateMachineManager, stateMachine);
             stateMachine.Configure(this, id, stateMachineManager, eventQueue);
             stateMachine.SetupEventHandlers();
             stateMachine.self = new PMachineValue(id, stateMachine.receives.ToList());
@@ -574,7 +574,7 @@ namespace PChecker.SystematicTesting
             AssertExpectedCallerStateMachine(sender, "SendEvent");
 
             var enqueueStatus = EnqueueEvent(targetId, e, sender, out var target);
-            if (enqueueStatus is EnqueueStatus.EventHandlerNotRunning)
+            if (enqueueStatus is AddEventStatus.EventHandlerNotRunning)
             {
                 RunStateMachineEventHandler(target, null, false, null);
             }
@@ -591,7 +591,7 @@ namespace PChecker.SystematicTesting
             AssertExpectedCallerStateMachine(sender, "SendEventAndExecuteAsync");
 
             var enqueueStatus = EnqueueEvent(targetId, e, sender, out var target);
-            if (enqueueStatus is EnqueueStatus.EventHandlerNotRunning)
+            if (enqueueStatus is AddEventStatus.EventHandlerNotRunning)
             {
                 RunStateMachineEventHandler(target, null, false, sender);
 
@@ -603,13 +603,13 @@ namespace PChecker.SystematicTesting
             // EnqueueStatus.EventHandlerNotRunning is not returned by EnqueueEvent
             // (even when the state machine was previously inactive) when the event e requires
             // no action by the state machine (i.e., it implicitly handles the event).
-            return enqueueStatus is EnqueueStatus.Dropped || enqueueStatus is EnqueueStatus.NextEventUnavailable;
+            return enqueueStatus is AddEventStatus.Dropped || enqueueStatus is AddEventStatus.NextEventUnavailable;
         }
 
         /// <summary>
         /// Enqueues an event to the state machine with the specified id.
         /// </summary>
-        private EnqueueStatus EnqueueEvent(StateMachineId targetId, Event e, StateMachine sender, out StateMachine target)
+        private AddEventStatus EnqueueEvent(StateMachineId targetId, Event e, StateMachine sender, out StateMachine target)
         {
             target = Scheduler.GetOperationWithId<StateMachineOperation>(targetId.Value)?.StateMachine;
             Assert(target != null,
@@ -626,11 +626,11 @@ namespace PChecker.SystematicTesting
                 LogWriter.LogSendEvent(targetId, sender?.Id.Name, sender?.Id.Type,
                     (sender)?.CurrentStateName ?? string.Empty, e, isTargetHalted: true);
                 TryHandleDroppedEvent(e, targetId);
-                return EnqueueStatus.Dropped;
+                return AddEventStatus.Dropped;
             }
 
             var enqueueStatus = EnqueueEvent(target, e, sender);
-            if (enqueueStatus == EnqueueStatus.Dropped)
+            if (enqueueStatus == AddEventStatus.Dropped)
             {
                 TryHandleDroppedEvent(e, targetId);
             }
@@ -641,7 +641,7 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// Enqueues an event to the state machine with the specified id.
         /// </summary>
-        private EnqueueStatus EnqueueEvent(StateMachine stateMachine, Event e, StateMachine sender)
+        private AddEventStatus EnqueueEvent(StateMachine stateMachine, Event e, StateMachine sender)
         {
             // Directly use sender as a StateMachine
             var originInfo = new EventOriginInfo(sender.Id, sender.GetType().FullName,

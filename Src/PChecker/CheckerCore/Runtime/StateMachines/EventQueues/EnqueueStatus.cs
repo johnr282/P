@@ -6,7 +6,7 @@ namespace PChecker.Runtime.StateMachines.EventQueues
     /// <summary>
     /// The status returned as the result of an enqueue operation.
     /// </summary>
-    internal enum EnqueueStatus
+    internal enum AddEventStatus
     {
         /// <summary>
         /// The event handler is already running.

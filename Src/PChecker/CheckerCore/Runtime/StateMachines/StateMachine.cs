@@ -52,7 +52,7 @@ namespace PChecker.Runtime.StateMachines
         /// The inbox of the state machine. Incoming events are enqueued here.
         /// Events are dequeued to be processed.
         /// </summary>
-        private protected IEventQueue Inbox;
+        private protected IEventInbox Inbox;
         
         /// <summary>
         /// Keeps track of state machine's current vector time.
@@ -294,7 +294,7 @@ namespace PChecker.Runtime.StateMachines
         /// <summary>
         /// Configures the state machine.
         /// </summary>
-        internal void Configure(ControlledRuntime runtime, StateMachineId id, IStateMachineManager manager, IEventQueue inbox)
+        internal void Configure(ControlledRuntime runtime, StateMachineId id, IStateMachineManager manager, IEventInbox inbox)
         {
             Runtime = runtime;
             Id = id;
@@ -594,7 +594,7 @@ namespace PChecker.Runtime.StateMachines
             {
                 (var status, var e, var info) = Inbox.Dequeue();
                 
-                if (status is DequeueStatus.Success)
+                if (status is EnabledEventsStatus.Success)
                 {
                     // Update state machine vector clock
                     VectorTime.Merge(info.VectorTime);
@@ -607,13 +607,13 @@ namespace PChecker.Runtime.StateMachines
                     await InvokeUserCallbackAsync(UserCallbackType.OnEventDequeued, e);
                     lastDequeuedEvent = e;
                 }
-                else if (status is DequeueStatus.Raised)
+                else if (status is EnabledEventsStatus.Raised)
                 {
                     // Only supported by types (e.g. StateMachine) that allow
                     // the user to explicitly raise events.
                     Runtime.NotifyHandleRaisedEvent(this, e);
                 }
-                else if (status is DequeueStatus.Default)
+                else if (status is EnabledEventsStatus.Default)
                 {
                     Runtime.LogWriter.LogDefaultEventHandler(Id, CurrentStateName);
 
@@ -622,7 +622,7 @@ namespace PChecker.Runtime.StateMachines
                     // instrument a scheduling point between default event handlers.
                     Runtime.NotifyDefaultEventDequeued(this);
                 }
-                else if (status is DequeueStatus.NotAvailable)
+                else if (status is EnabledEventsStatus.NotAvailable)
                 {
                     // Terminate the handler as there is no event available.
                     break;
@@ -895,14 +895,14 @@ namespace PChecker.Runtime.StateMachines
         /// <summary>
         /// Enqueues the specified event and its metadata.
         /// </summary>
-        internal EnqueueStatus Enqueue(Event e, EventInfo info)
+        internal AddEventStatus Enqueue(Event e, EventInfo info)
         {
             if (CurrentStatus is Status.Halted)
             {
-                return EnqueueStatus.Dropped;
+                return AddEventStatus.Dropped;
             }
 
-            return Inbox.Enqueue(e, info);
+            return Inbox.AddEvent(e, info);
         }
         
         /// <summary>
