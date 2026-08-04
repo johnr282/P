@@ -1,11 +1,12 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using PChecker.Runtime.Events;
 using PChecker.Runtime.StateMachines.Managers;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace PChecker.Runtime.StateMachines.EventInboxes
 {
@@ -95,25 +96,18 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         }
 
         /// <inheritdoc/>
-        protected override (Event e, EventInfo info) FindReceivedEvent(Dictionary<Type, Func<Event, bool>> eventWaitTypes)
+        protected override IEnumerable<(Event e, EventInfo info)> GetReceivedEvents(Dictionary<Type, Func<Event, bool>> eventWaitTypes)
         {
-            (Event e, EventInfo info) receivedEvent = default;
-            var node = Queue.First;
-            while (node != null)
-            {
-                // Dequeue the first event that the caller waits to receive, if there is one in the queue.
-                if (IsWaitedEvent(node.Value.e, eventWaitTypes))
-                {
-                    receivedEvent = node.Value;
-                    // TODO: Should this node be removed?
-                    Queue.Remove(node);
-                    break;
-                }
+            (Event e, EventInfo info) receivedEvent = Queue.FirstOrDefault(
+                x => IsWaitedEvent(x.e, eventWaitTypes));
 
-                node = node.Next;
+            HashSet<(Event e, EventInfo info)> events = new();
+            if (receivedEvent != default)
+            {
+                events.Add(receivedEvent);
             }
 
-            return receivedEvent;
+            return events;
         }
 
         /// <inheritdoc/>

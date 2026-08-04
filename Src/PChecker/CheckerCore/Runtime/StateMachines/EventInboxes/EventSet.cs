@@ -49,10 +49,11 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         }
 
         /// <inheritdoc/>
-        protected override (Event e, EventInfo info) FindReceivedEvent(Dictionary<Type, Func<Event, bool>> eventWaitTypes)
+        protected override IEnumerable<(Event e, EventInfo info)> GetReceivedEvents(Dictionary<Type, Func<Event, bool>> eventWaitTypes)
         {
-            // TODO: Figure out a better way to implement receive; this method needs to
-            // return a collection of events, not a single event
+            HashSet<(Event e, EventInfo info)> receivedEvents = new(
+                Set.Where(x => IsWaitedEvent(x.e, eventWaitTypes)));
+            return receivedEvents;
         }
 
         /// <inheritdoc/>

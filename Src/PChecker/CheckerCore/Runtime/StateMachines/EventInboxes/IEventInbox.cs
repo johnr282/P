@@ -59,6 +59,12 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         Task<Event> ReceiveEventAsync(params Tuple<Type, Func<Event, bool>>[] events);
 
         /// <summary>
+        /// Notifies inbox that its state machine's pending receive has completed with 
+        /// the specified event. 
+        /// </summary>
+        void CompleteReceive(Event e, EventInfo info);
+
+        /// <summary>
         /// Returns the cached state of the inbox.
         /// </summary>
         int GetCachedState();
