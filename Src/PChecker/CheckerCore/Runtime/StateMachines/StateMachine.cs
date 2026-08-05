@@ -1366,6 +1366,14 @@ namespace PChecker.Runtime.StateMachines
             EventHandlerMap.ContainsKey(typeof(DefaultEvent));
 
         /// <summary>
+        /// Checks if this state machine is blocked on a receive.
+        /// </summary>
+        internal bool IsBlockedOnReceive()
+        {
+            return Inbox.IsBlockedOnReceive();
+        }
+
+        /// <summary>
         /// Returns the hashed state of this state machine.
         /// </summary>
         internal int GetHashedState()

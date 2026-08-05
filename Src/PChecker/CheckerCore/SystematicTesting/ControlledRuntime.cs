@@ -1103,8 +1103,6 @@ namespace PChecker.SystematicTesting
         {
             var stateName = stateMachine.CurrentStateName;
             LogWriter.LogReceiveEvent(stateMachine.Id, stateName, e, wasBlocked: true);
-            var op = Scheduler.GetOperationWithId<StateMachineOperation>(stateMachine.Id.Value);
-            op.OnReceivedEvent();
         }
 
         /// <summary>
@@ -1144,9 +1142,6 @@ namespace PChecker.SystematicTesting
         internal void NotifyWaitEvent(StateMachine stateMachine, IEnumerable<Type> eventTypes)
         {
             var stateName = stateMachine.CurrentStateName;
-            var op = Scheduler.GetOperationWithId<StateMachineOperation>(stateMachine.Id.Value);
-            op.OnWaitEvent(eventTypes);
-
             var eventWaitTypesArray = eventTypes.ToArray();
             if (eventWaitTypesArray.Length == 1)
             {

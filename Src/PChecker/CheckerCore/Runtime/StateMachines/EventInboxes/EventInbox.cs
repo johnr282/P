@@ -264,6 +264,12 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         }
 
         /// <inheritdoc/>
+        public bool IsBlockedOnReceive()
+        {
+            return PendingReceive && !GetReceivedEvents(EventWaitTypes).Any();
+        }
+
+        /// <inheritdoc/>
         public int GetCachedState()
         {
             IEnumerable<(Event e, EventInfo info)> inboxEvents = GetInboxEvents();

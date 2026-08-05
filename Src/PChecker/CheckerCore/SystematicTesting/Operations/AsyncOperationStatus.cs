@@ -29,11 +29,6 @@ namespace PChecker.SystematicTesting.Operations
         BlockedOnWaitAny,
 
         /// <summary>
-        /// The operation is waiting to receive an event.
-        /// </summary>
-        BlockedOnReceive,
-
-        /// <summary>
         /// The operation is waiting to acquire a resource.
         /// </summary>
         BlockedOnResource,

@@ -65,6 +65,12 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         void CompleteReceive(Event e, EventInfo info);
 
         /// <summary>
+        /// Returns whether inbox's state machine is currently blocked on a receive, 
+        /// meaning there are no events in the inbox that could complete the pending receive. 
+        /// </summary>
+        bool IsBlockedOnReceive();
+
+        /// <summary>
         /// Returns the cached state of the inbox.
         /// </summary>
         int GetCachedState();

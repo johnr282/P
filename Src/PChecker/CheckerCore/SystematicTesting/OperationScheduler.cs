@@ -493,7 +493,7 @@ namespace PChecker.SystematicTesting
 #endif
         private void CheckIfProgramHasDeadlocked(IEnumerable<AsyncOperation> ops)
         {
-            var blockedOnReceiveOperations = ops.Where(op => op.Status is AsyncOperationStatus.BlockedOnReceive).ToList();
+            var blockedOnReceiveOperations = GetOpsBlockedOnReceive(ops).ToList();
             var blockedOnWaitOperations = ops.Where(op => op.Status is AsyncOperationStatus.BlockedOnWaitAll ||
                                                           op.Status is AsyncOperationStatus.BlockedOnWaitAny).ToList();
             var blockedOnResourceSynchronization = ops.Where(op => op.Status is AsyncOperationStatus.BlockedOnResource).ToList();
@@ -564,6 +564,13 @@ namespace PChecker.SystematicTesting
             }
 
             NotifyAssertionFailure(message);
+        }
+
+        private IEnumerable<AsyncOperation> GetOpsBlockedOnReceive(IEnumerable<AsyncOperation> ops)
+        {
+            // Only StateMachineOperations can be blocked on receive
+            var stateMachineOps = ops.OfType<StateMachineOperation>();
+            return stateMachineOps.Where(op => op.StateMachine.IsBlockedOnReceive());
         }
 
         /// <summary>
