@@ -19,6 +19,11 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         int Size { get; }
 
         /// <summary>
+        /// The currently raised event.
+        /// </summary>
+        (Event e, EventInfo info) RaisedEvent { get; }
+
+        /// <summary>
         /// Checks if an event has been raised.
         /// </summary>
         bool IsEventRaised { get; }
@@ -29,19 +34,25 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         bool IsReceivePending { get; }
 
         /// <summary>
+        /// The current inbox status.
+        /// </summary>
+        InboxStatus Status { get; }
+
+        /// <summary>
         /// Adds the specified event and its optional metadata.
         /// </summary>
         AddEventStatus AddEvent(Event e, EventInfo info);
 
         /// <summary>
         /// Returns the currently enabled events in the inbox, along with their optional metadata.
+        /// Must not modify inbox state.
         /// </summary>
-        (EnabledEventsStatus status, IEnumerable<(Event e, EventInfo info)> events) GetEnabledEvents();
+        (InboxStatus status, IEnumerable<(Event e, EventInfo info)> events) GetEnabledEvents();
 
         /// <summary>
-        /// Removes the specified event with the specified metadata from the inbox.
+        /// Notifies inbox that the specified enabled event has been chosen for execution.
         /// </summary>
-        void Remove(Event e, EventInfo info);
+        void NotifyChosenEvent(Event e, EventInfo info);
 
         /// <summary>
         /// Adds the specified raised event.

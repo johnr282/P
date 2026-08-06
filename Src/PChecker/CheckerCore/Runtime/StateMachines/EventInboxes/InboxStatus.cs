@@ -4,17 +4,17 @@
 namespace PChecker.Runtime.StateMachines.EventInboxes
 {
     /// <summary>
-    /// The status of an event inbox's enabled events.
+    /// The status of an event inbox.
     /// </summary>
-    internal enum EnabledEventsStatus
+    internal enum InboxStatus
     {
         /// <summary>
-        /// Standard events are enabled.
+        /// Events are enabled.
         /// </summary>
-        Success = 0,
+        EventsEnabled = 0,
 
         /// <summary>
-        /// Only the raised event is enabled.
+        /// An event has been raised.
         /// </summary>
         Raised,
 
@@ -26,6 +26,6 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         /// <summary>
         /// No events are enabled.
         /// </summary>
-        NotAvailable
+        NoEventsEnabled
     }
 }

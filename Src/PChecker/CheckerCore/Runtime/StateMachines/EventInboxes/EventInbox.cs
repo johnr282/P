@@ -26,11 +26,6 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         private readonly StateMachine StateMachine;
 
         /// <summary>
-        /// The raised event and its metadata, or null if no event has been raised.
-        /// </summary>
-        private (Event e, EventInfo info) RaisedEvent;
-
-        /// <summary>
         /// Map from the types of events that the owner of the queue is waiting to receive
         /// to an optional predicate. If an event of one of these types is enqueued, then
         /// if there is no predicate, or if there is a predicate and evaluates to true, then
@@ -55,7 +50,13 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         public int Size => GetInboxEvents().Count();
 
         /// <inheritdoc/>
+        public (Event e, EventInfo info) RaisedEvent { get; private set; } = default;
+
+        /// <inheritdoc/>
         public bool IsEventRaised => RaisedEvent != default;
+
+        /// <inheritdoc/>
+        public InboxStatus Status => GetEnabledEvents().status;
 
         internal EventInbox(IStateMachineManager stateMachineManager, StateMachine stateMachine)
         {
@@ -96,44 +97,39 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         protected abstract void AddEventToInbox(Event e, EventInfo info);
 
         /// <inheritdoc/>
-        public (EnabledEventsStatus status, IEnumerable<(Event e, EventInfo info)> events) GetEnabledEvents()
+        public (InboxStatus status, IEnumerable<(Event e, EventInfo info)> events) GetEnabledEvents()
         {
-            HashSet<(Event e, EventInfo info)> events = new();
+            List<(Event e, EventInfo info)> events = new();
 
             // Try to get the raised event, if there is one. Raised events
             // have priority over the events in the inbox.
-            if (RaisedEvent != default)
+            // TODO: should the user be able to raise an ignored event?
+            if (IsEventRaised && !IsEventIgnored(RaisedEvent.e, RaisedEvent.info))
             {
-                if (StateMachineManager.IsEventIgnored(RaisedEvent.e, RaisedEvent.info))
-                {
-                    // TODO: should the user be able to raise an ignored event?
-                    // The raised event is ignored in the current state.
-                    RaisedEvent = default;
-                }
-                else
-                {
-                    var raisedEvent = RaisedEvent;
-                    RaisedEvent = default;
-                    events.Add(raisedEvent);
-                    return (EnabledEventsStatus.Raised, events);
-                }
+                events.Add(RaisedEvent);
+                return (InboxStatus.Raised, events);
             }
 
             if (IsReceivePending)
             {
-                return (EnabledEventsStatus.Success, GetReceivedEvents(EventWaitTypes));
+                // Don't need a separate status for pending receive because state
+                // machine will be currently executing a handler, not starting a
+                // new event loop iteration, which is where status is checked.
+                return (InboxStatus.EventsEnabled, GetReceivedEvents(EventWaitTypes));
             }
 
             var hasDefaultHandler = StateMachineManager.IsDefaultHandlerAvailable();
-            if (hasDefaultHandler)
-            {
-                StateMachine.Runtime.NotifyDefaultEventHandlerCheck(StateMachine);
-            }
+            // TODO: Figure out where to put this scheduling point
+            //if (hasDefaultHandler)
+            //{
+            //    // This calls the scheduler, which we definitely don't want to do.
+            //    StateMachine.Runtime.NotifyDefaultEventHandlerCheck(StateMachine);
+            //}
 
             IEnumerable<(Event e, EventInfo info)> enabledEvents = GetEnabledEventsFromInbox();
             if (enabledEvents.Any())
             {
-                return (EnabledEventsStatus.Success, enabledEvents);
+                return (InboxStatus.EventsEnabled, enabledEvents);
             }
 
             // No event are enabled, so check if there is a default event handler.
@@ -141,24 +137,20 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
             {
                 // There is no default event handler installed, so do not return an event.
                 StateMachineManager.IsEventHandlerRunning = false;
-                return (EnabledEventsStatus.NotAvailable, events);
+                return (InboxStatus.NoEventsEnabled, events);
             }
 
             // TODO: check op-id of default event.
             // A default event handler exists.
-            var stateName = StateMachine.CurrentState.GetType().Name;
-            var eventOrigin = new EventOriginInfo(StateMachine.Id, StateMachine.GetType().FullName, stateName);
-            events.Add((DefaultEvent.Instance,
-                new EventInfo(DefaultEvent.Instance, eventOrigin, StateMachine.VectorTime)));
-            return (EnabledEventsStatus.Default, events);
+            events.Add(DefaultEvent.InstanceWithInfo(StateMachine));
+            return (InboxStatus.Default, events);
         }
 
         /// <summary>
         /// Returns the currently enabled events in the inbox, along with their optional 
-        /// metadata. Must not remove the returned events from the inbox. If checkOnly is
-        /// false, may remove ignored events if necessary. 
+        /// metadata. Must not modify inbox state. 
         /// </summary>
-        protected abstract IEnumerable<(Event e, EventInfo info)> GetEnabledEventsFromInbox(bool checkOnly = false);
+        protected abstract IEnumerable<(Event e, EventInfo info)> GetEnabledEventsFromInbox();
 
         /// <summary>
         /// Returns whether the specified event is ignored in the state machine's current state.
@@ -177,7 +169,12 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         }
 
         /// <inheritdoc/>
-        public abstract void Remove(Event e, EventInfo info);
+        public void NotifyChosenEvent(Event e, EventInfo info)
+        {
+            // Handle case where an event was raised, but it is ignored in the
+            // current state and normal enabled events were available. Raised
+            // event should be cleared in this case. 
+        }
 
         /// <inheritdoc/>
         public void RaiseEvent(Event e)

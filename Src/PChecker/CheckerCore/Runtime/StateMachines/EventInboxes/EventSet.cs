@@ -43,7 +43,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         }
 
         /// <inheritdoc/>
-        public override void Remove(Event e, EventInfo info)
+        public override void NotifyChosenEvent(Event e, EventInfo info)
         {
             Set.Remove((e, info));
         }

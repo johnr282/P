@@ -608,49 +608,65 @@ namespace PChecker.Runtime.StateMachines
             Event lastDequeuedEvent = null;
             while (CurrentStatus != Status.Halted && Runtime.IsRunning)
             {
-                (var status, var e, var info) = Inbox.Dequeue();
-                
-                if (status is EnabledEventsStatus.Success)
-                {
-                    // Update state machine vector clock
-                    VectorTime.Merge(info.VectorTime);
-                    BehavioralObserver.AddToCurrentTimeline(e, BehavioralObserver.EventType.DEQUEUE, VectorTime);
-                    
-                    // Notify the runtime for a new event to handle. This is only used
-                    // during bug-finding and operation bounding, because the runtime
-                    // has to schedule an state machine when a new operation is dequeued.
-                    Runtime.NotifyDequeuedEvent(this, e, info);
-                    await InvokeUserCallbackAsync(UserCallbackType.OnEventDequeued, e);
-                    lastDequeuedEvent = e;
-                }
-                else if (status is EnabledEventsStatus.Raised)
-                {
-                    // Only supported by types (e.g. StateMachine) that allow
-                    // the user to explicitly raise events.
-                    Runtime.NotifyHandleRaisedEvent(this, e);
-                }
-                else if (status is EnabledEventsStatus.Default)
-                {
-                    Runtime.LogWriter.LogDefaultEventHandler(Id, CurrentStateName);
+                (Event e, EventInfo info) nextEvent;
 
-                    // If the default event was dequeued, then notify the runtime.
-                    // This is only used during bug-finding, because the runtime must
-                    // instrument a scheduling point between default event handlers.
-                    Runtime.NotifyDefaultEventDequeued(this);
-                }
-                else if (status is EnabledEventsStatus.NotAvailable)
+                switch (Inbox.Status)
                 {
-                    // Terminate the handler as there is no event available.
-                    break;
+                    // Raised events take priority and are handled immediately without
+                    // a scheduling point.
+                    case InboxStatus.Raised:
+                        nextEvent = Inbox.RaisedEvent;
+                        // Only supported by types (e.g. StateMachine) that allow
+                        // the user to explicitly raise events.
+                        Runtime.NotifyHandleRaisedEvent(this, nextEvent.e);
+                        break;
+
+                    case InboxStatus.EventsEnabled:
+                    case InboxStatus.Default:
+                        nextEvent = Runtime.GetNextEvent(this);
+
+                        if (DefaultEvent.IsDefaultEvent(nextEvent.e))
+                        {
+                            Runtime.LogWriter.LogDefaultEventHandler(Id, CurrentStateName);
+
+                            // If the default event was dequeued, then notify the runtime.
+                            // This is only used during bug-finding, because the runtime must
+                            // instrument a scheduling point between default event handlers.
+                            Runtime.NotifyDefaultEventDequeued(this);
+                        }
+                        else
+                        {
+                            // Update state machine vector clock
+                            VectorTime.Merge(nextEvent.info.VectorTime);
+                            BehavioralObserver.AddToCurrentTimeline(
+                                nextEvent.e,
+                                BehavioralObserver.EventType.DEQUEUE,
+                                VectorTime);
+
+                            // Notify the runtime for a new event to handle. This is only used
+                            // during bug-finding and operation bounding, because the runtime
+                            // has to schedule an state machine when a new operation is dequeued.
+                            Runtime.NotifyDequeuedEvent(this, nextEvent.e, nextEvent.info);
+                            await InvokeUserCallbackAsync(UserCallbackType.OnEventDequeued, nextEvent.e);
+                            lastDequeuedEvent = nextEvent.e;
+                        }
+                        break;
+
+                    case InboxStatus.NoEventsEnabled:
+                        // No events to handle, so terminate the handler.
+                        return;
+
+                    default:
+                        throw new PInternalException("Invalid inbox status.");
                 }
 
                 if (CurrentStatus is Status.Active)
                 {   
-                    InProgressEvent = e;
+                    InProgressEvent = nextEvent;
                     try
                     {
                         // Handles the next event, if the state machine is not halted.
-                        await HandleEventAsync(e);
+                        await HandleEventAsync(nextEvent.e);
                     }
                     finally
                     {
@@ -668,7 +684,7 @@ namespace PChecker.Runtime.StateMachines
                 if (CurrentStatus is Status.Halting)
                 {
                     // If the current status is halting, then halt the state machine.
-                    await HaltAsync(e);
+                    await HaltAsync(nextEvent.e);
                 }
             }
         }

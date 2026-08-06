@@ -1029,6 +1029,15 @@ namespace PChecker.SystematicTesting
         }
 
         /// <summary>
+        /// Notifies that a state machine is ready to handle a new <see cref="Event"/>
+        /// and returns the next event to be handled. 
+        /// </summary>
+        internal (Event e, EventInfo info) GetNextEvent(StateMachine stateMachine)
+        {
+
+        }
+
+        /// <summary>
         /// Notifies that a state machine dequeued an <see cref="Event"/>.
         /// </summary>
         internal void NotifyDequeuedEvent(StateMachine stateMachine, Event e, EventInfo eventInfo)
