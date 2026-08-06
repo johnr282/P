@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using PChecker.Runtime.StateMachines;
 using System.Runtime.Serialization;
 
 namespace PChecker.Runtime.Events
@@ -16,6 +17,24 @@ namespace PChecker.Runtime.Events
         /// Gets a <see cref="DefaultEvent"/> instance.
         /// </summary>
         public static DefaultEvent Instance { get; } = new DefaultEvent();
+
+        internal static (DefaultEvent e, EventInfo info) InstanceWithInfo(StateMachine machine)
+        {
+            var stateName = machine.CurrentState.GetType().Name;
+            var eventOrigin = new EventOriginInfo(
+                machine.Id,
+                machine.GetType().FullName,
+                stateName);
+
+            var defaultEvent = Instance;
+            EventInfo defaultInfo = new EventInfo(
+                defaultEvent,
+                eventOrigin,
+                machine.VectorTime);
+            return (defaultEvent, defaultInfo);
+        }
+
+        internal static bool IsDefaultEvent(Event e) => e == Instance;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DefaultEvent"/> class.
