@@ -70,7 +70,7 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// The currently scheduled asynchronous operation.
         /// </summary>
-        internal AsyncOperation ScheduledOperation { get; private set; }
+        internal AsyncOperation ScheduledOperation => LastSchedulingChoice.Operation;
 
         /// <summary>
         /// Number of scheduled steps.
@@ -147,15 +147,15 @@ namespace PChecker.SystematicTesting
             CheckIfSchedulingStepsBoundIsReached();
 
             // Update the operation type.
-            current.Type = type;
+            LastSchedulingChoice.Operation.Type = type;
 
             if (CheckerConfiguration.IsProgramStateHashingEnabled)
             {
                 // Update the current operation with the hashed program state.
-                current.HashedProgramState = Runtime.GetHashedProgramState();
+                LastSchedulingChoice.Operation.HashedProgramState = Runtime.GetHashedProgramState();
             }
 
-            if (!GetNextSchedulingChoice(type, out var nextChoice))
+            if (!GetNextSchedulingChoice(out var nextChoice))
             {
                 // Checks if the program has deadlocked.
                 CheckIfProgramHasDeadlocked();
@@ -172,7 +172,6 @@ namespace PChecker.SystematicTesting
             }
 
             LastSchedulingChoice = nextChoice;
-            ScheduledOperation = nextChoice.Operation;
             var nextOp = nextChoice.Operation;
             // TODO: Need to record the choice, not only the operation
             ScheduleTrace.AddSchedulingChoice(nextOp.Id);
@@ -219,12 +218,18 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// Determines the next scheduling choice. Returns whether a next choice is found.
         /// </summary>
-        private bool GetNextSchedulingChoice(AsyncOperationType type, 
-            out SchedulingChoice next)
+        private bool GetNextSchedulingChoice(out SchedulingChoice next)
         {
             var choices = GetSchedulingChoices();
+            return Strategy.GetNextSchedulingChoice(
+                LastSchedulingChoice, 
+                choices, 
+                out next);
         }
 
+        /// <summary>
+        /// Returns the currently available scheduling choices.
+        /// </summary>
         private IEnumerable<SchedulingChoice> GetSchedulingChoices()
         {
             // Get and order the operations by their id.
@@ -255,6 +260,9 @@ namespace PChecker.SystematicTesting
             return choices;
         }
 
+        /// <summary>
+        /// Returns the available scheduling choices for the specified state machine operation.
+        /// </summary>
         private IEnumerable<SchedulingChoice> GetSchedulingChoicesForMachineOp(StateMachineOperation machineOp)
         {
             var choices = new List<SchedulingChoice>();
@@ -354,7 +362,9 @@ namespace PChecker.SystematicTesting
         {
             if (OperationMap.Count == 0)
             {
-                ScheduledOperation = op;
+                // Create an initial scheduling choice; first registered operation should
+                // always be a TaskOperation corresponding to the initial test task.
+                LastSchedulingChoice = new RunTaskChoice((TaskOperation)op);
             }
 
             return OperationMap.TryAdd(op.Id, op);
