@@ -23,4 +23,17 @@
         <None Include="../../../Icon/icon.png" Pack="true" PackagePath="" />
         <None Include="../../../README.md" Pack="true" PackagePath="" />
     </ItemGroup>
+	<ItemGroup>
+		<Compile Remove="SystematicTesting\Strategies\Exhaustive\DFSStrategy.cs" />
+		<Compile Remove="SystematicTesting\Strategies\Feedback\FeedbackGuidedStrategy.cs" />
+		<Compile Remove="SystematicTesting\Strategies\Feedback\ScheduleAndInputStrategy.cs" />
+		<Compile Remove="SystematicTesting\Strategies\Liveness\LivenessCheckingStrategy.cs" />
+		<Compile Remove="SystematicTesting\Strategies\Liveness\TemperatureCheckingStrategy.cs" />
+		<Compile Remove="SystematicTesting\Strategies\MonitorGuided\MonitorGuidedStrategy.cs" />
+		<Compile Remove="SystematicTesting\Strategies\Special\ComboStrategy.cs" />
+		<Compile Remove="SystematicTesting\Strategies\Special\ReplayStrategy.cs" />
+		<Compile Remove="SystematicTesting\Strategies\Probabilistic\PCTStrategy.cs" />
+		<Compile Remove="SystematicTesting\Strategies\Probabilistic\ProbabilisticRandomStrategy.cs" />
+		<Compile Remove="SystematicTesting\Strategies\Probabilistic\QLearningStrategy.cs" />
+	</ItemGroup>
 </Project>

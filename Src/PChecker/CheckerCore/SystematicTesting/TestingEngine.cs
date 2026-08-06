@@ -25,11 +25,11 @@ using PChecker.Random;
 using PChecker.Runtime;
 using PChecker.Runtime.Logging;
 using PChecker.SystematicTesting.Strategies;
-using PChecker.SystematicTesting.Strategies.Exhaustive;
+//using PChecker.SystematicTesting.Strategies.Exhaustive;
 using PChecker.SystematicTesting.Strategies.Feedback;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
-using PChecker.SystematicTesting.Strategies.Special;
-using PChecker.SystematicTesting.Strategies.MonitorGuided;
+//using PChecker.SystematicTesting.Strategies.Special;
+//using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using PChecker.SystematicTesting.Traces;
 using PChecker.Utilities;
 using Debug = PChecker.IO.Debugging.Debug;
@@ -158,7 +158,8 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// Checks if the systematic testing engine is running in replay mode.
         /// </summary>
-        private bool IsReplayModeEnabled => Strategy is ReplayStrategy;
+        //private bool IsReplayModeEnabled => Strategy is ReplayStrategy;
+        private bool IsReplayModeEnabled => false;
 
         /// <summary>
         /// A guard for printing info.
@@ -254,79 +255,84 @@ namespace PChecker.SystematicTesting
             {
                 JsonVerboseLogs = new List<List<LogEntry>>();
             }
-            if (checkerConfiguration.SchedulingStrategy is "replay")
-            {
-                var scheduleDump = GetScheduleForReplay(out var isFair);
-                var schedule = new ScheduleTrace(scheduleDump);
-                Strategy = new ReplayStrategy(checkerConfiguration, schedule, isFair);
-            }
-            else if (checkerConfiguration.SchedulingStrategy is "random")
+            //if (checkerConfiguration.SchedulingStrategy is "replay")
+            //{
+            //    var scheduleDump = GetScheduleForReplay(out var isFair);
+            //    var schedule = new ScheduleTrace(scheduleDump);
+            //    Strategy = new ReplayStrategy(checkerConfiguration, schedule, isFair);
+            //}
+            if (checkerConfiguration.SchedulingStrategy is "random")
             {
                 Strategy = new RandomStrategy(checkerConfiguration.MaxFairSchedulingSteps, RandomValueGenerator);
             }
-            else if (checkerConfiguration.SchedulingStrategy is "pct")
+            else
             {
-                Strategy = new PCTStrategy(checkerConfiguration.MaxUnfairSchedulingSteps, checkerConfiguration.StrategyBound,
-                    RandomValueGenerator);
+                Error.ReportAndExit(checkerConfiguration.SchedulingStrategy + 
+                    " is not available.");
             }
-            else if (checkerConfiguration.SchedulingStrategy is "pos")
-            {
-                var scheduler = new POSScheduler(RandomValueGenerator);
-                Strategy = new ScheduleAndInputStrategy(checkerConfiguration.MaxUnfairSchedulingSteps,
-                    RandomValueGenerator, scheduler);
-            }
-            else if (checkerConfiguration.SchedulingStrategy is "fairpct")
-            {
-                var prefixLength = checkerConfiguration.MaxUnfairSchedulingSteps;
-                var prefixStrategy = new PCTStrategy(prefixLength, checkerConfiguration.StrategyBound, RandomValueGenerator);
-                var suffixStrategy = new RandomStrategy(checkerConfiguration.MaxFairSchedulingSteps, RandomValueGenerator);
-                Strategy = new ComboStrategy(prefixStrategy, suffixStrategy);
-            }
-            else if (checkerConfiguration.SchedulingStrategy is "probabilistic")
-            {
-                Strategy = new ProbabilisticRandomStrategy(checkerConfiguration.MaxFairSchedulingSteps,
-                    checkerConfiguration.StrategyBound, RandomValueGenerator);
-            }
-            else if (checkerConfiguration.SchedulingStrategy is "rl")
-            {
-                Strategy = new QLearningStrategy(checkerConfiguration.MaxUnfairSchedulingSteps, RandomValueGenerator);
-            }
-            else if (checkerConfiguration.SchedulingStrategy is "dfs")
-            {
-                Strategy = new DFSStrategy(checkerConfiguration.MaxUnfairSchedulingSteps);
-            }
-            else if (checkerConfiguration.SchedulingStrategy is "feedback")
-            {
-                Strategy = new FeedbackGuidedStrategy(checkerConfiguration, new ControlledRandom(checkerConfiguration),
-                    new RandomScheduler(new ControlledRandom(checkerConfiguration)));
-            }
-            else if (checkerConfiguration.SchedulingStrategy is "feedbackpct")
-            {
-                Strategy = new FeedbackGuidedStrategy(checkerConfiguration, new ControlledRandom(checkerConfiguration),
-                    new PCTScheduler(checkerConfiguration.StrategyBound, 0, new ControlledRandom(checkerConfiguration)));
-            }
-            else if (checkerConfiguration.SchedulingStrategy is "feedbackpos")
-            {
-                Strategy = new FeedbackGuidedStrategy(checkerConfiguration, new ControlledRandom(checkerConfiguration),
-                    new POSScheduler(new ControlledRandom(checkerConfiguration)));
-            }
-            else if (checkerConfiguration.SchedulingStrategy is "monitorguided")
-            {
-                Strategy = new MonitorGuidedStrategy();
-            }
-            else if (checkerConfiguration.SchedulingStrategy is "portfolio")
-            {
-                Error.ReportAndExit("Portfolio testing strategy is only " +
-                                    "available in parallel testing.");
-            }
+            //else if (checkerConfiguration.SchedulingStrategy is "pct")
+            //{
+            //    Strategy = new PCTStrategy(checkerConfiguration.MaxUnfairSchedulingSteps, checkerConfiguration.StrategyBound,
+            //        RandomValueGenerator);
+            //}
+            //else if (checkerConfiguration.SchedulingStrategy is "pos")
+            //{
+            //    var scheduler = new POSScheduler(RandomValueGenerator);
+            //    Strategy = new ScheduleAndInputStrategy(checkerConfiguration.MaxUnfairSchedulingSteps,
+            //        RandomValueGenerator, scheduler);
+            //}
+            //else if (checkerConfiguration.SchedulingStrategy is "fairpct")
+            //{
+            //    var prefixLength = checkerConfiguration.MaxUnfairSchedulingSteps;
+            //    var prefixStrategy = new PCTStrategy(prefixLength, checkerConfiguration.StrategyBound, RandomValueGenerator);
+            //    var suffixStrategy = new RandomStrategy(checkerConfiguration.MaxFairSchedulingSteps, RandomValueGenerator);
+            //    Strategy = new ComboStrategy(prefixStrategy, suffixStrategy);
+            //}
+            //else if (checkerConfiguration.SchedulingStrategy is "probabilistic")
+            //{
+            //    Strategy = new ProbabilisticRandomStrategy(checkerConfiguration.MaxFairSchedulingSteps,
+            //        checkerConfiguration.StrategyBound, RandomValueGenerator);
+            //}
+            //else if (checkerConfiguration.SchedulingStrategy is "rl")
+            //{
+            //    Strategy = new QLearningStrategy(checkerConfiguration.MaxUnfairSchedulingSteps, RandomValueGenerator);
+            //}
+            //else if (checkerConfiguration.SchedulingStrategy is "dfs")
+            //{
+            //    Strategy = new DFSStrategy(checkerConfiguration.MaxUnfairSchedulingSteps);
+            //}
+            //else if (checkerConfiguration.SchedulingStrategy is "feedback")
+            //{
+            //    Strategy = new FeedbackGuidedStrategy(checkerConfiguration, new ControlledRandom(checkerConfiguration),
+            //        new RandomScheduler(new ControlledRandom(checkerConfiguration)));
+            //}
+            //else if (checkerConfiguration.SchedulingStrategy is "feedbackpct")
+            //{
+            //    Strategy = new FeedbackGuidedStrategy(checkerConfiguration, new ControlledRandom(checkerConfiguration),
+            //        new PCTScheduler(checkerConfiguration.StrategyBound, 0, new ControlledRandom(checkerConfiguration)));
+            //}
+            //else if (checkerConfiguration.SchedulingStrategy is "feedbackpos")
+            //{
+            //    Strategy = new FeedbackGuidedStrategy(checkerConfiguration, new ControlledRandom(checkerConfiguration),
+            //        new POSScheduler(new ControlledRandom(checkerConfiguration)));
+            //}
+            //else if (checkerConfiguration.SchedulingStrategy is "monitorguided")
+            //{
+            //    Strategy = new MonitorGuidedStrategy();
+            //}
+            //else if (checkerConfiguration.SchedulingStrategy is "portfolio")
+            //{
+            //    Error.ReportAndExit("Portfolio testing strategy is only " +
+            //                        "available in parallel testing.");
+            //}
 
-            if (checkerConfiguration.SchedulingStrategy != "replay" &&
-                checkerConfiguration.ScheduleFile.Length > 0)
-            {
-                var scheduleDump = GetScheduleForReplay(out var isFair);
-                var schedule = new ScheduleTrace(scheduleDump);
-                Strategy = new ReplayStrategy(checkerConfiguration, schedule, isFair, Strategy);
-            }
+            //if (checkerConfiguration.SchedulingStrategy != "replay" &&
+            //    checkerConfiguration.ScheduleFile.Length > 0)
+            //{
+            //    var scheduleDump = GetScheduleForReplay(out var isFair);
+            //    var schedule = new ScheduleTrace(scheduleDump);
+            //    Strategy = new ReplayStrategy(checkerConfiguration, schedule, isFair, Strategy);
+            //}
         }
 
         /// <summary>
