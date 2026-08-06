@@ -306,7 +306,7 @@ namespace PChecker.SystematicTesting
             // Checks if the scheduling steps bound has been reached.
             CheckIfSchedulingStepsBoundIsReached();
 
-            if (!Strategy.GetNextBooleanChoice(ScheduledOperation, maxValue, out var choice))
+            if (!Strategy.GetNextBooleanChoice(LastSchedulingChoice, maxValue, out var choice))
             {
                 Debug.WriteLine("<ScheduleDebug> Schedule explored.");
                 Stop();
@@ -334,7 +334,7 @@ namespace PChecker.SystematicTesting
             // Checks if the scheduling steps bound has been reached.
             CheckIfSchedulingStepsBoundIsReached();
 
-            if (!Strategy.GetNextIntegerChoice(ScheduledOperation, maxValue, out var choice))
+            if (!Strategy.GetNextIntegerChoice(LastSchedulingChoice, maxValue, out var choice))
             {
                 Debug.WriteLine("<ScheduleDebug> Schedule explored.");
                 Stop();

@@ -39,17 +39,14 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         }
 
         /// <inheritdoc/>
-        public virtual bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next)
+        public virtual bool GetNextSchedulingChoice(
+            SchedulingChoice lastChoice, 
+            IEnumerable<SchedulingChoice> choices, 
+            out SchedulingChoice next)
         {
-            var enabledOperations = ops.Where(op => op.Status is AsyncOperationStatus.Enabled).ToList();
-            if (enabledOperations.Count == 0)
-            {
-                next = null;
-                return false;
-            }
-
-            var idx = RandomValueGenerator.Next(enabledOperations.Count);
-            next = enabledOperations[idx];
+            var choicesList = choices.ToList();
+            var idx = RandomValueGenerator.Next(choicesList.Count);
+            next = choicesList[idx];
 
             ScheduledSteps++;
 
@@ -57,7 +54,7 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         }
 
         /// <inheritdoc/>
-        public virtual bool GetNextBooleanChoice(AsyncOperation current, int maxValue, out bool next)
+        public virtual bool GetNextBooleanChoice(SchedulingChoice lastChoice, int maxValue, out bool next)
         {
             next = false;
             if (RandomValueGenerator.Next(maxValue) == 0)
@@ -71,7 +68,7 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         }
 
         /// <inheritdoc/>
-        public virtual bool GetNextIntegerChoice(AsyncOperation current, int maxValue, out int next)
+        public virtual bool GetNextIntegerChoice(SchedulingChoice lastChoice, int maxValue, out int next)
         {
             next = RandomValueGenerator.Next(maxValue);
             ScheduledSteps++;

@@ -12,31 +12,34 @@ namespace PChecker.SystematicTesting.Strategies
     internal interface ISchedulingStrategy
     {
         /// <summary>
-        /// Returns the next asynchronous operation to schedule.
+        /// Returns the next scheduling choice.
         /// </summary>
-        /// <param name="current">The currently scheduled operation.</param>
-        /// <param name="ops">List of operations that can be scheduled.</param>
-        /// <param name="next">The next operation to schedule.</param>
+        /// <param name="lastChoice">The most recent scheduling choice.</param>
+        /// <param name="choices">List of possible scheduling choices.</param>
+        /// <param name="next">The chosen next scheduling choice.</param>
         /// <returns>True if there is a next choice, else false.</returns>
-        bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next);
+        bool GetNextSchedulingChoice(
+            SchedulingChoice lastChoice, 
+            IEnumerable<SchedulingChoice> choices, 
+            out SchedulingChoice next);
 
         /// <summary>
         /// Returns the next boolean choice.
         /// </summary>
-        /// <param name="current">The currently scheduled operation.</param>
+        /// <param name="lastChoice">The most recent scheduling choice.</param>
         /// <param name="maxValue">The max value.</param>
         /// <param name="next">The next boolean choice.</param>
         /// <returns>True if there is a next choice, else false.</returns>
-        bool GetNextBooleanChoice(AsyncOperation current, int maxValue, out bool next);
+        bool GetNextBooleanChoice(SchedulingChoice lastChoice, int maxValue, out bool next);
 
         /// <summary>
         /// Returns the next integer choice.
         /// </summary>
-        /// <param name="current">The currently scheduled operation.</param>
+        /// <param name="lastChoice">The most recent scheduling choice.</param>
         /// <param name="maxValue">The max value.</param>
         /// <param name="next">The next integer choice.</param>
         /// <returns>True if there is a next choice, else false.</returns>
-        bool GetNextIntegerChoice(AsyncOperation current, int maxValue, out int next);
+        bool GetNextIntegerChoice(SchedulingChoice lastChoice, int maxValue, out int next);
 
         /// <summary>
         /// Prepares for the next schedule. This is invoked
