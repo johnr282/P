@@ -48,10 +48,8 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         /// </summary>
         private bool IsClosed;
 
-        /// <summary>
-        /// True if this inbox's state machine is blocked on a receive.
-        /// </summary>
-        private bool PendingReceive;
+        /// <inheritdoc/>
+        public bool IsReceivePending { get; private set; }
 
         /// <inheritdoc/>
         public int Size => GetInboxEvents().Count();
@@ -121,7 +119,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
                 }
             }
 
-            if (PendingReceive)
+            if (IsReceivePending)
             {
                 return (EnabledEventsStatus.Success, GetReceivedEvents(EventWaitTypes));
             }
@@ -232,7 +230,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         private Task<Event> ReceiveEventAsync(Dictionary<Type, Func<Event, bool>> eventWaitTypes)
         {
             StateMachine.Runtime.NotifyReceiveCalled(StateMachine);
-            PendingReceive = true;
+            IsReceivePending = true;
             ReceiveCompletionSource = new TaskCompletionSource<Event>();
             EventWaitTypes = eventWaitTypes;
             StateMachineManager.OnWaitEvent(EventWaitTypes.Keys);
@@ -257,7 +255,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         /// <inheritdoc/>
         public void CompleteReceive(Event e, EventInfo info)
         {
-            PendingReceive = false;
+            IsReceivePending = false;
             EventWaitTypes.Clear();
             StateMachineManager.OnReceiveEvent(e, info);
             ReceiveCompletionSource.SetResult(e);
@@ -266,7 +264,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         /// <inheritdoc/>
         public bool IsBlockedOnReceive()
         {
-            return PendingReceive && !GetReceivedEvents(EventWaitTypes).Any();
+            return IsReceivePending && !GetReceivedEvents(EventWaitTypes).Any();
         }
 
         /// <inheritdoc/>

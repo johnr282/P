@@ -47,12 +47,13 @@ namespace PChecker.SystematicTesting.Operations
         /// <summary>
         /// Event that will be delivered to the operation.
         /// </summary>
-        public Event EventToDeliver { get; }
+        public (Event e, EventInfo info) EventToDeliver { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DeliverEventChoice"/> class.
         /// </summary>
-        internal DeliverEventChoice(StateMachineOperation operation, Event eventToDeliver)
+        internal DeliverEventChoice(StateMachineOperation operation, 
+            (Event e, EventInfo info) eventToDeliver)
             : base(operation)
         {
             EventToDeliver = eventToDeliver;
@@ -67,12 +68,13 @@ namespace PChecker.SystematicTesting.Operations
         /// <summary>
         /// Event whose handler will resume.
         /// </summary>
-        public Event EventToResume { get; }
+        public (Event e, EventInfo info) EventToResume { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ResumeHandlerChoice"/> class.
         /// </summary>
-        internal ResumeHandlerChoice(StateMachineOperation operation, Event eventToResume)
+        internal ResumeHandlerChoice(StateMachineOperation operation, 
+            (Event e, EventInfo info) eventToResume)
             : base(operation)
         {
             EventToResume = eventToResume;
@@ -87,20 +89,20 @@ namespace PChecker.SystematicTesting.Operations
         /// <summary>
         /// Event whose handler called receive and will resume.
         /// </summary>
-        public Event EventToResume { get; }
+        public (Event e, EventInfo info) EventToResume { get; }
 
         /// <summary>
         /// Event that will be delivered to complete the receive.
         /// </summary>
-        public Event EventToDeliver { get; }
+        public (Event e, EventInfo info) EventToDeliver { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="CompleteReceiveChoice"/> class.
         /// </summary>
         internal CompleteReceiveChoice(
-            StateMachineOperation operation, 
-            Event eventToResume, 
-            Event eventToDeliver)
+            StateMachineOperation operation,
+            (Event e, EventInfo info) eventToResume, 
+            (Event e, EventInfo info) eventToDeliver)
             : base(operation)
         {
             EventToResume = eventToResume;

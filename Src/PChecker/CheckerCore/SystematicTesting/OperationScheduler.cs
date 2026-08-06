@@ -9,6 +9,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using PChecker.Exceptions;
+using PChecker.Runtime.StateMachines.EventInboxes;
 using PChecker.SystematicTesting.Operations;
 using PChecker.SystematicTesting.Strategies;
 using PChecker.SystematicTesting.Traces;
@@ -60,6 +61,11 @@ namespace PChecker.SystematicTesting
         /// Checks if the scheduler is running.
         /// </summary>
         internal bool IsRunning { get; private set; }
+
+        /// <summary>
+        /// The most recent scheduling choice.
+        /// </summary>
+        internal SchedulingChoice LastSchedulingChoice { get; private set; }
 
         /// <summary>
         /// The currently scheduled asynchronous operation.
@@ -149,23 +155,10 @@ namespace PChecker.SystematicTesting
                 current.HashedProgramState = Runtime.GetHashedProgramState();
             }
 
-            // Get and order the operations by their id.
-            var ops = OperationMap.Values.OrderBy(op => op.Id);
-
-            // Try enable any operation that is currently waiting, but has its dependencies already satisfied.
-            foreach (var op in ops)
-            {
-                if (op is AsyncOperation machineOp)
-                {
-                    machineOp.TryEnable();
-                    Debug.WriteLine("<ScheduleDebug> Operation '{0}' has status '{1}'.", op.Id, op.Status);
-                }
-            }
-
-            if (!Strategy.GetNextOperation(current, ops, out var next))
+            if (!GetNextSchedulingChoice(type, out var nextChoice))
             {
                 // Checks if the program has deadlocked.
-                CheckIfProgramHasDeadlocked(ops.Select(op => op));
+                CheckIfProgramHasDeadlocked();
 
                 Debug.WriteLine("<ScheduleDebug> Schedule explored.");
                 HasFullyExploredSchedule = true;
@@ -178,18 +171,21 @@ namespace PChecker.SystematicTesting
                 }
             }
 
-            ScheduledOperation = next;
-            ScheduleTrace.AddSchedulingChoice(next.Id);
+            LastSchedulingChoice = nextChoice;
+            ScheduledOperation = nextChoice.Operation;
+            var nextOp = nextChoice.Operation;
+            // TODO: Need to record the choice, not only the operation
+            ScheduleTrace.AddSchedulingChoice(nextOp.Id);
 
-            Debug.WriteLine($"<ScheduleDebug> Scheduling the next operation of '{next.Name}'.");
+            Debug.WriteLine($"<ScheduleDebug> Scheduling the next operation of '{nextOp.Name}'.");
 
-            if (current != next)
+            if (current != nextOp)
             {
                 current.IsActive = false;
-                lock (next)
+                lock (nextOp)
                 {
                     ScheduledOperation.IsActive = true;
-                    Monitor.PulseAll(next);
+                    Monitor.PulseAll(nextOp);
                 }
 
                 lock (current)
@@ -218,6 +214,79 @@ namespace PChecker.SystematicTesting
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Determines the next scheduling choice. Returns whether a next choice is found.
+        /// </summary>
+        private bool GetNextSchedulingChoice(AsyncOperationType type, 
+            out SchedulingChoice next)
+        {
+            var choices = GetSchedulingChoices();
+        }
+
+        private IEnumerable<SchedulingChoice> GetSchedulingChoices()
+        {
+            // Get and order the operations by their id.
+            var ops = OperationMap.Values.OrderBy(op => op.Id);
+
+            // Try enable any operation that is currently waiting, but has its dependencies already satisfied.
+            foreach (var op in ops)
+            {
+                op.TryEnable();
+                Debug.WriteLine("<ScheduleDebug> Operation '{0}' has status '{1}'.", op.Id, op.Status);
+            }
+
+            var enabledOps = ops.Where(op => op.Status is AsyncOperationStatus.Enabled);
+
+            var choices = new List<SchedulingChoice>();
+            foreach (var op in enabledOps)
+            {
+                if (op is TaskOperation taskOp)
+                {
+                    choices.Add(new RunTaskChoice(taskOp));
+                }
+                else if (op is StateMachineOperation machineOp)
+                {
+                    choices.AddRange(GetSchedulingChoicesForMachineOp(machineOp));
+                }
+            }
+
+            return choices;
+        }
+
+        private IEnumerable<SchedulingChoice> GetSchedulingChoicesForMachineOp(StateMachineOperation machineOp)
+        {
+            var choices = new List<SchedulingChoice>();
+            var machine = machineOp.StateMachine;
+
+            if (machine.IsEventHandlerInProgress)
+            {
+                if (machine.IsReceivePending)
+                {
+                    var receiveEvents = machine.GetEnabledEvents();
+                    foreach (var e in receiveEvents)
+                    {
+                        choices.Add(new CompleteReceiveChoice(
+                            machineOp, machine.InProgressEvent, e));
+                    }
+                }
+                else
+                {
+                    choices.Add(new ResumeHandlerChoice(
+                        machineOp, machine.InProgressEvent));
+                }
+            }
+            else
+            {
+                var enabledEvents = machine.GetEnabledEvents();
+                foreach (var e in enabledEvents)
+                {
+                    choices.Add(new DeliverEventChoice(machineOp, e));
+                }
+            }
+
+            return choices;
         }
 
         /// <summary>
@@ -491,8 +560,9 @@ namespace PChecker.SystematicTesting
 #if !DEBUG
         [DebuggerHidden]
 #endif
-        private void CheckIfProgramHasDeadlocked(IEnumerable<AsyncOperation> ops)
+        private void CheckIfProgramHasDeadlocked()
         {
+            var ops = OperationMap.Values;
             var blockedOnReceiveOperations = GetOpsBlockedOnReceive(ops).ToList();
             var blockedOnWaitOperations = ops.Where(op => op.Status is AsyncOperationStatus.BlockedOnWaitAll ||
                                                           op.Status is AsyncOperationStatus.BlockedOnWaitAny).ToList();

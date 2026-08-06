@@ -110,7 +110,23 @@ namespace PChecker.Runtime.StateMachines
         /// the runtime can read it concurrently.
         /// </summary>
         private protected volatile Status CurrentStatus;
-        
+
+        /// <summary>
+        /// Event whose handler is currently executing; null if no handler is in progress.
+        /// </summary>
+        internal (Event e, EventInfo info) InProgressEvent { get; private set; } = (null, null);
+
+        /// <summary>
+        /// Whether the state machine has received an event and is currently executing 
+        /// its event handler.
+        /// </summary>
+        internal bool IsEventHandlerInProgress => InProgressEvent != (null, null);
+
+        /// <summary>
+        /// Whether this state machine has a pending receive.
+        /// </summary>
+        internal bool IsReceivePending => Inbox.IsReceivePending;
+
         /// <summary>
         /// Gets the name of the current state, if there is one.
         /// </summary>
@@ -629,9 +645,17 @@ namespace PChecker.Runtime.StateMachines
                 }
 
                 if (CurrentStatus is Status.Active)
-                {
-                    // Handles the next event, if the state machine is not halted.
-                    await HandleEventAsync(e);
+                {   
+                    InProgressEvent = e;
+                    try
+                    {
+                        // Handles the next event, if the state machine is not halted.
+                        await HandleEventAsync(e);
+                    }
+                    finally
+                    {
+                        InProgressEvent = (null, null);
+                    }
                 }
 
                 if (!Inbox.IsEventRaised && lastDequeuedEvent != null && CurrentStatus != Status.Halted)
@@ -904,7 +928,14 @@ namespace PChecker.Runtime.StateMachines
 
             return Inbox.AddEvent(e, info);
         }
-        
+
+        internal IEnumerable<(Event e, EventInfo info)> GetEnabledEvents()
+        {
+            // TODO: Consider whether this should modify the inbox or be read-only; 
+            // currently modifies inbox
+            return Inbox.GetEnabledEvents().events;
+        }
+
         /// <summary>
         /// Returns a string that represents the current state machine.
         /// </summary>

@@ -24,6 +24,11 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         bool IsEventRaised { get; }
 
         /// <summary>
+        /// Checks if this inbox has a pending receive.
+        /// </summary>
+        bool IsReceivePending { get; }
+
+        /// <summary>
         /// Adds the specified event and its optional metadata.
         /// </summary>
         AddEventStatus AddEvent(Event e, EventInfo info);
