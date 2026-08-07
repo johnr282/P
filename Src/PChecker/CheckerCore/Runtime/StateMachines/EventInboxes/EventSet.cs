@@ -32,20 +32,20 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         }
 
         /// <inheritdoc/>
-        protected override IEnumerable<(Event e, EventInfo info)> GetEnabledEventsFromInbox(bool checkOnly = false)
+        protected override IEnumerable<(Event e, EventInfo info)> GetEnabledEventsFromInbox()
         {
             // With event set semantics, ignoring and deferring events are equivalent. 
             // Ignored events should not be removed because the scheduler may want to 
             // delay their delivery until later. 
             HashSet<(Event e, EventInfo info)> enabledEvents = new(
-                Set.Where(x => !IsEventIgnored(x.e, x.info) && !IsEventDeferred(x.e, x.info)));
+                Set.Where(x => !IsEventIgnored(x) && !IsEventDeferred(x)));
             return enabledEvents;
         }
 
         /// <inheritdoc/>
-        public override void NotifyChosenEvent(Event e, EventInfo info)
+        protected override void RemoveChosenEvent((Event e, EventInfo info) chosenEvent)
         {
-            Set.Remove((e, info));
+            Set.Remove(chosenEvent);
         }
 
         /// <inheritdoc/>

@@ -3,6 +3,7 @@
 
 using PChecker.Runtime.Events;
 using PChecker.Runtime.StateMachines.Managers;
+using PChecker.Runtime.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -36,10 +37,10 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         }
 
         /// <inheritdoc/>
-        protected override IEnumerable<(Event e, EventInfo info)> GetEnabledEventsFromInbox(bool checkOnly = false)
+        protected override IEnumerable<(Event e, EventInfo info)> GetEnabledEventsFromInbox()
         {
             HashSet<(Event e, EventInfo info)> events = new();
-            (Event, EventInfo) nextEvent = TryDequeueEvent(checkOnly);
+            (Event, EventInfo) nextEvent = TryDequeueEvent(true);
             if (nextEvent != default)
             {
                 events.Add(nextEvent);
@@ -62,7 +63,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
                 var nextNode = node.Next;
                 var currentEvent = node.Value;
 
-                if (IsEventIgnored(currentEvent.e, currentEvent.info))
+                if (IsEventIgnored(currentEvent))
                 {
                     if (!checkOnly)
                     {
@@ -75,10 +76,12 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
                 }
 
                 // Skips a deferred event.
-                if (!IsEventDeferred(currentEvent.e, currentEvent.info))
+                if (!IsEventDeferred(currentEvent))
                 {
-                    // Cannot remove event from queue yet; scheduler must choose to
-                    // execute it first
+                    if (!checkOnly)
+                    {
+                        Queue.Remove(node);
+                    }
                     nextAvailableEvent = currentEvent;
                     break;
                 }
@@ -90,9 +93,15 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         }
 
         /// <inheritdoc/>
-        public override void NotifyChosenEvent(Event e, EventInfo info)
+        protected override void RemoveChosenEvent((Event e, EventInfo info) chosenEvent)
         {
-            Queue.Remove((e, info));
+            // Removes chosen event and all prior ignored events from the queue.
+            var dequeuedEvent = TryDequeueEvent(false);
+            if (dequeuedEvent != chosenEvent)
+            {
+                throw new PInternalException(
+                    "Chosen event does not match next dequeued event.");
+            }
         }
 
         /// <inheritdoc/>

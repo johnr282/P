@@ -1,4 +1,5 @@
 ﻿using PChecker.Runtime.Events;
+using PChecker.Runtime.Exceptions;
 using PChecker.Runtime.StateMachines.Managers;
 using System;
 using System.Collections;
@@ -79,7 +80,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
 
             if (!StateMachineManager.IsEventHandlerRunning)
             {
-                if (!GetEnabledEventsFromInbox(true).Any())
+                if (!GetEnabledEventsFromInbox().Any())
                 {
                     return AddEventStatus.NoEventsAvailable;
                 }
@@ -104,7 +105,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
             // Try to get the raised event, if there is one. Raised events
             // have priority over the events in the inbox.
             // TODO: should the user be able to raise an ignored event?
-            if (IsEventRaised && !IsEventIgnored(RaisedEvent.e, RaisedEvent.info))
+            if (IsEventRaised && !IsEventIgnored(RaisedEvent))
             {
                 events.Add(RaisedEvent);
                 return (InboxStatus.Raised, events);
@@ -155,26 +156,49 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         /// <summary>
         /// Returns whether the specified event is ignored in the state machine's current state.
         /// </summary>
-        protected bool IsEventIgnored(Event e, EventInfo info)
+        protected bool IsEventIgnored((Event e, EventInfo info) e)
         {
-            return StateMachineManager.IsEventIgnored(e, info);
+            return StateMachineManager.IsEventIgnored(e.e, e.info);
         }
 
         /// <summary>
         /// Returns whether the specified event is deferred in the state machine's current state.
         /// </summary>
-        protected bool IsEventDeferred(Event e, EventInfo info)
+        protected bool IsEventDeferred((Event e, EventInfo info) e)
         {
-            return StateMachineManager.IsEventDeferred(e, info);
+            return StateMachineManager.IsEventDeferred(e.e, e.info);
         }
 
         /// <inheritdoc/>
-        public void NotifyChosenEvent(Event e, EventInfo info)
+        public void NotifyChosenEvent((Event e, EventInfo info) chosenEvent)
         {
-            // Handle case where an event was raised, but it is ignored in the
-            // current state and normal enabled events were available. Raised
-            // event should be cleared in this case. 
+            if (IsEventRaised)
+            {
+                // If a raised event was not chosen, it must be ignored in the current state.
+                if (chosenEvent != RaisedEvent && !IsEventIgnored(RaisedEvent))
+                {
+                    throw new PInternalException(
+                        "Raised event was not chosen, but is not ignored.");
+                }
+
+                // Regardless of whether raised event was chosen or is ignored in the 
+                // current state, clear it. 
+                RaisedEvent = default;
+                return;
+            }
+
+            if (DefaultEvent.IsDefaultEvent(chosenEvent.e))
+            {
+                return;
+            }
+            
+            RemoveChosenEvent(chosenEvent);
         }
+
+        /// <summary>
+        /// Removes the specified chosen event from the inbox.
+        /// </summary>
+        protected abstract void RemoveChosenEvent((Event e, EventInfo info) chosenEvent);
 
         /// <inheritdoc/>
         public void RaiseEvent(Event e)

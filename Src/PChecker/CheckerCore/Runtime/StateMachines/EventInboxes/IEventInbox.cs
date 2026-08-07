@@ -52,7 +52,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         /// <summary>
         /// Notifies inbox that the specified enabled event has been chosen for execution.
         /// </summary>
-        void NotifyChosenEvent(Event e, EventInfo info);
+        void NotifyChosenEvent((Event e, EventInfo info) chosenEvent);
 
         /// <summary>
         /// Adds the specified raised event.

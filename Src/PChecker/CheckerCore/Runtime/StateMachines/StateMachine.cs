@@ -605,7 +605,7 @@ namespace PChecker.Runtime.StateMachines
         /// </summary>
         internal async Task RunEventHandlerAsync()
         {
-            Event lastDequeuedEvent = null;
+            Event lastChosenEvent = null;
             while (CurrentStatus != Status.Halted && Runtime.IsRunning)
             {
                 (Event e, EventInfo info) nextEvent;
@@ -621,8 +621,8 @@ namespace PChecker.Runtime.StateMachines
                         Runtime.NotifyHandleRaisedEvent(this, nextEvent.e);
                         break;
 
-                    case InboxStatus.EventsEnabled:
                     case InboxStatus.Default:
+                    case InboxStatus.EventsEnabled:
                         nextEvent = Runtime.GetNextEvent(this);
 
                         if (DefaultEvent.IsDefaultEvent(nextEvent.e))
@@ -648,7 +648,7 @@ namespace PChecker.Runtime.StateMachines
                             // has to schedule an state machine when a new operation is dequeued.
                             Runtime.NotifyDequeuedEvent(this, nextEvent.e, nextEvent.info);
                             await InvokeUserCallbackAsync(UserCallbackType.OnEventDequeued, nextEvent.e);
-                            lastDequeuedEvent = nextEvent.e;
+                            lastChosenEvent = nextEvent.e;
                         }
                         break;
 
@@ -659,6 +659,8 @@ namespace PChecker.Runtime.StateMachines
                     default:
                         throw new PInternalException("Invalid inbox status.");
                 }
+
+                Inbox.NotifyChosenEvent(nextEvent);
 
                 if (CurrentStatus is Status.Active)
                 {   
@@ -674,11 +676,11 @@ namespace PChecker.Runtime.StateMachines
                     }
                 }
 
-                if (!Inbox.IsEventRaised && lastDequeuedEvent != null && CurrentStatus != Status.Halted)
+                if (!Inbox.IsEventRaised && lastChosenEvent != null && CurrentStatus != Status.Halted)
                 {
                     // Inform the user that the state machine handled the dequeued event.
-                    await InvokeUserCallbackAsync(UserCallbackType.OnEventHandled, lastDequeuedEvent);
-                    lastDequeuedEvent = null;
+                    await InvokeUserCallbackAsync(UserCallbackType.OnEventHandled, lastChosenEvent);
+                    lastChosenEvent = null;
                 }
 
                 if (CurrentStatus is Status.Halting)
