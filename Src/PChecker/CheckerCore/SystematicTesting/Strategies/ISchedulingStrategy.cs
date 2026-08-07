@@ -15,7 +15,7 @@ namespace PChecker.SystematicTesting.Strategies
         /// Returns the next scheduling choice.
         /// </summary>
         /// <param name="lastChoice">The most recent scheduling choice.</param>
-        /// <param name="choices">List of possible scheduling choices.</param>
+        /// <param name="choices">Nonempty list of possible scheduling choices.</param>
         /// <param name="next">The chosen next scheduling choice.</param>
         /// <returns>True if there is a next choice, else false.</returns>
         bool GetNextSchedulingChoice(

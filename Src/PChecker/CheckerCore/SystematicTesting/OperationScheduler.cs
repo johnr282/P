@@ -221,6 +221,12 @@ namespace PChecker.SystematicTesting
         private bool GetNextSchedulingChoice(out SchedulingChoice next)
         {
             var choices = GetSchedulingChoices();
+            if (!choices.Any())
+            {
+                next = null;
+                return false;
+            }
+
             return Strategy.GetNextSchedulingChoice(
                 LastSchedulingChoice, 
                 choices, 
