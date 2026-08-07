@@ -1,6 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using PChecker.Exceptions;
+using PChecker.Runtime.StateMachines.EventInboxes;
+using PChecker.SystematicTesting.Operations;
+using PChecker.SystematicTesting.Strategies;
+using PChecker.SystematicTesting.Traces;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -8,11 +13,6 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using PChecker.Exceptions;
-using PChecker.Runtime.StateMachines.EventInboxes;
-using PChecker.SystematicTesting.Operations;
-using PChecker.SystematicTesting.Strategies;
-using PChecker.SystematicTesting.Traces;
 using Debug = PChecker.IO.Debugging.Debug;
 
 namespace PChecker.SystematicTesting
@@ -171,9 +171,16 @@ namespace PChecker.SystematicTesting
                 }
             }
 
+            // Notify state machine of receive completion if necessary
+            if (nextChoice is CompleteReceiveChoice receiveChoice)
+            {
+                var stateMachine = receiveChoice.Operation.StateMachine;
+                stateMachine.CompleteReceive(receiveChoice.EventToDeliver);
+            }
+
             LastSchedulingChoice = nextChoice;
             var nextOp = nextChoice.Operation;
-            // TODO: Need to record the choice, not only the operation
+            // JR TODO: Need to record the choice, not only the operation
             ScheduleTrace.AddSchedulingChoice(nextOp.Id);
 
             Debug.WriteLine($"<ScheduleDebug> Scheduling the next operation of '{nextOp.Name}'.");
@@ -216,7 +223,8 @@ namespace PChecker.SystematicTesting
         }
 
         /// <summary>
-        /// Determines the next scheduling choice. Returns whether a next choice is found.
+        /// Determines the next scheduling choice. Returns whether a next choice
+        /// is found. 
         /// </summary>
         private bool GetNextSchedulingChoice(out SchedulingChoice next)
         {
@@ -228,8 +236,8 @@ namespace PChecker.SystematicTesting
             }
 
             return Strategy.GetNextSchedulingChoice(
-                LastSchedulingChoice, 
-                choices, 
+                LastSchedulingChoice,
+                choices,
                 out next);
         }
 

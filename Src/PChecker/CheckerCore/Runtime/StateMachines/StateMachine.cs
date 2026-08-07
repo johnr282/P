@@ -942,9 +942,21 @@ namespace PChecker.Runtime.StateMachines
             return Inbox.AddEvent(e, info);
         }
 
+        /// <summary>
+        /// Returns the state machine's currently enabled events from its inbox.
+        /// </summary>
         internal IEnumerable<(Event e, EventInfo info)> GetEnabledEvents()
         {
             return Inbox.GetEnabledEvents().events;
+        }
+
+        /// <summary>
+        /// Notifies that the state machine has completed the receive operation 
+        /// for the specified event.
+        /// </summary>
+        internal void CompleteReceive((Event e, EventInfo info) receivedEvent)
+        {
+            Inbox.CompleteReceive(receivedEvent);
         }
 
         /// <summary>

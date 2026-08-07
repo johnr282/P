@@ -79,7 +79,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         /// Notifies inbox that its state machine's pending receive has completed with 
         /// the specified event. 
         /// </summary>
-        void CompleteReceive(Event e, EventInfo info);
+        void CompleteReceive((Event e, EventInfo info) receivedEvent);
 
         /// <summary>
         /// Returns whether inbox's state machine is currently blocked on a receive, 

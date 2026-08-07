@@ -59,6 +59,12 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         }
 
         /// <inheritdoc/>
+        protected override void RemoveReceivedEvent((Event e, EventInfo info) receivedEvent)
+        {
+            Events.Remove(receivedEvent);
+        }
+
+        /// <inheritdoc/>
         protected override void ClearInbox()
         {
             Events.Clear();

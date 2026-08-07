@@ -268,13 +268,21 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         }
 
         /// <inheritdoc/>
-        public void CompleteReceive(Event e, EventInfo info)
+        public void CompleteReceive((Event e, EventInfo info) receivedEvent)
         {
             IsReceivePending = false;
             EventWaitTypes.Clear();
-            StateMachineManager.OnReceiveEvent(e, info);
-            ReceiveCompletionSource.SetResult(e);
+            RemoveReceivedEvent(receivedEvent);
+            StateMachineManager.OnReceiveEvent(receivedEvent.e, receivedEvent.info);
+            ReceiveCompletionSource.SetResult(receivedEvent.e);
         }
+
+        /// <summary>
+        /// Removes the specified received event from the inbox. This must bypass 
+        /// normal removal logic and remove only the received event, as receive can 
+        /// alter normal event processing order. 
+        /// </summary>
+        protected abstract void RemoveReceivedEvent((Event e, EventInfo info) receivedEvent);
 
         /// <inheritdoc/>
         public bool IsBlockedOnReceive()
