@@ -16,6 +16,7 @@ using PChecker.Coverage;
 using PChecker.Exceptions;
 using PChecker.Random;
 using PChecker.Runtime.Events;
+using PChecker.Runtime.Exceptions;
 using PChecker.Runtime.Logging;
 using PChecker.Runtime.StateMachines;
 using PChecker.Runtime.StateMachines.EventInboxes;
@@ -1034,7 +1035,17 @@ namespace PChecker.SystematicTesting
         /// </summary>
         internal (Event e, EventInfo info) GetNextEvent(StateMachine stateMachine)
         {
+            Scheduler.ScheduleNextEnabledOperation(AsyncOperationType.Receive);
+            ResetProgramCounter(stateMachine);
+            var nextChoice = Scheduler.LastSchedulingChoice;
 
+            // Caller machine must have no in-progress handler, so nextChoice must be
+            // a DeliverEventChoice
+            var deliverEventChoice = nextChoice as DeliverEventChoice
+                ?? throw new PInternalException(
+                    $"Expected a DeliverEventChoice, but got {nextChoice.GetType().Name}.");
+
+            return deliverEventChoice.EventToDeliver;
         }
 
         /// <summary>
@@ -1042,40 +1053,8 @@ namespace PChecker.SystematicTesting
         /// </summary>
         internal void NotifyDequeuedEvent(StateMachine stateMachine, Event e, EventInfo eventInfo)
         {
-            var op = Scheduler.GetOperationWithId<StateMachineOperation>(stateMachine.Id.Value);
-
-            // Skip `ReceiveEventAsync` if the last operation exited the previous event handler,
-            // to avoid scheduling duplicate `ReceiveEventAsync` operations.
-            if (op.SkipNextReceiveSchedulingPoint)
-            {
-                op.SkipNextReceiveSchedulingPoint = false;
-            }
-            else
-            {
-                Scheduler.ScheduleNextEnabledOperation(AsyncOperationType.Receive);
-                ResetProgramCounter(stateMachine);
-            }
-
             var stateName = stateMachine.CurrentStateName;
             LogWriter.LogDequeueEvent(stateMachine.Id, stateName, e);
-        }
-
-        /// <summary>
-        /// Notifies that a state machine dequeued the default <see cref="Event"/>.
-        /// </summary>
-        internal void NotifyDefaultEventDequeued(StateMachine stateMachine)
-        {
-            Scheduler.ScheduleNextEnabledOperation(AsyncOperationType.Receive);
-            ResetProgramCounter(stateMachine);
-        }
-
-        /// <summary>
-        /// Notifies that the inbox of the specified state machine is about to be
-        /// checked to see if the default event handler should fire.
-        /// </summary>
-        internal void NotifyDefaultEventHandlerCheck(StateMachine stateMachine)
-        {
-            Scheduler.ScheduleNextEnabledOperation(AsyncOperationType.Default);
         }
 
         /// <summary>

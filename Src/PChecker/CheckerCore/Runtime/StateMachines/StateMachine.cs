@@ -623,16 +623,14 @@ namespace PChecker.Runtime.StateMachines
 
                     case InboxStatus.Default:
                     case InboxStatus.EventsEnabled:
+                        // Get the next event to handle from the runtime. This is a 
+                        // scheduling point; this machine's execution continues when 
+                        // the scheduler chooses to deliver a new event. 
                         nextEvent = Runtime.GetNextEvent(this);
 
                         if (DefaultEvent.IsDefaultEvent(nextEvent.e))
                         {
                             Runtime.LogWriter.LogDefaultEventHandler(Id, CurrentStateName);
-
-                            // If the default event was dequeued, then notify the runtime.
-                            // This is only used during bug-finding, because the runtime must
-                            // instrument a scheduling point between default event handlers.
-                            Runtime.NotifyDefaultEventDequeued(this);
                         }
                         else
                         {
@@ -643,9 +641,6 @@ namespace PChecker.Runtime.StateMachines
                                 BehavioralObserver.EventType.DEQUEUE,
                                 VectorTime);
 
-                            // Notify the runtime for a new event to handle. This is only used
-                            // during bug-finding and operation bounding, because the runtime
-                            // has to schedule an state machine when a new operation is dequeued.
                             Runtime.NotifyDequeuedEvent(this, nextEvent.e, nextEvent.info);
                             await InvokeUserCallbackAsync(UserCallbackType.OnEventDequeued, nextEvent.e);
                             lastChosenEvent = nextEvent.e;
@@ -949,8 +944,6 @@ namespace PChecker.Runtime.StateMachines
 
         internal IEnumerable<(Event e, EventInfo info)> GetEnabledEvents()
         {
-            // TODO: Consider whether this should modify the inbox or be read-only; 
-            // currently modifies inbox
             return Inbox.GetEnabledEvents().events;
         }
 

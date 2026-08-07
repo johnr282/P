@@ -119,14 +119,6 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
                 return (InboxStatus.EventsEnabled, GetReceivedEvents(EventWaitTypes));
             }
 
-            var hasDefaultHandler = StateMachineManager.IsDefaultHandlerAvailable();
-            // TODO: Figure out where to put this scheduling point
-            //if (hasDefaultHandler)
-            //{
-            //    // This calls the scheduler, which we definitely don't want to do.
-            //    StateMachine.Runtime.NotifyDefaultEventHandlerCheck(StateMachine);
-            //}
-
             IEnumerable<(Event e, EventInfo info)> enabledEvents = GetEnabledEventsFromInbox();
             if (enabledEvents.Any())
             {
@@ -134,6 +126,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
             }
 
             // No event are enabled, so check if there is a default event handler.
+            var hasDefaultHandler = StateMachineManager.IsDefaultHandlerAvailable();
             if (!hasDefaultHandler)
             {
                 // There is no default event handler installed, so do not return an event.
