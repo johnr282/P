@@ -171,6 +171,8 @@ namespace PChecker.SystematicTesting
                 }
             }
 
+            LastSchedulingChoice = nextChoice;
+
             // Notify state machine of receive completion if necessary
             if (nextChoice is CompleteReceiveChoice receiveChoice)
             {
@@ -178,7 +180,6 @@ namespace PChecker.SystematicTesting
                 stateMachine.CompleteReceive(receiveChoice.EventToDeliver);
             }
 
-            LastSchedulingChoice = nextChoice;
             var nextOp = nextChoice.Operation;
             // JR TODO: Need to record the choice, not only the operation
             ScheduleTrace.AddSchedulingChoice(nextOp.Id);

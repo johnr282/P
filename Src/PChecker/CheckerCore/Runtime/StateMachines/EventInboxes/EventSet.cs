@@ -47,7 +47,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         /// <inheritdoc/>
         protected override void RemoveChosenEvent((Event e, EventInfo info) chosenEvent)
         {
-            Events.Remove(chosenEvent);
+            Remove(chosenEvent);
         }
 
         /// <inheritdoc/>
@@ -61,7 +61,16 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         /// <inheritdoc/>
         protected override void RemoveReceivedEvent((Event e, EventInfo info) receivedEvent)
         {
-            Events.Remove(receivedEvent);
+            Remove(receivedEvent);
+        }
+
+        private void Remove((Event e, EventInfo info) e)
+        {
+            if (!Events.Remove(e))
+            {
+                throw new InvalidOperationException(
+                    $"Could not remove event; {e} not found in inbox.");
+            }
         }
 
         /// <inheritdoc/>

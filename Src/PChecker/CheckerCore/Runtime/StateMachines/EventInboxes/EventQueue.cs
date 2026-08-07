@@ -122,7 +122,11 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         /// <inheritdoc/>
         protected override void RemoveReceivedEvent((Event e, EventInfo info) receivedEvent)
         {
-            Queue.Remove(receivedEvent);
+            if (!Queue.Remove(receivedEvent))
+            {
+                throw new InvalidOperationException(
+                    $"Could not remove event; {receivedEvent} not found in inbox.");
+            }
         }
 
         /// <inheritdoc/>
