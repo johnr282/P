@@ -142,7 +142,8 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
 
         /// <summary>
         /// Returns the currently enabled events in the inbox, along with their optional 
-        /// metadata. Must not modify inbox state. 
+        /// metadata. Must not modify inbox state. Returned events must be ordered 
+        /// deterministically.
         /// </summary>
         protected abstract IEnumerable<(Event e, EventInfo info)> GetEnabledEventsFromInbox();
 
@@ -322,8 +323,8 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         protected abstract void ClearInbox();
 
         /// <summary>
-        /// Returns all events in the inbox with their metadata. Only used when event 
-        /// ordering doesn't matter.
+        /// Returns all events in the inbox with their metadata. As long as it is 
+        /// deterministic, event order does not matter.
         /// </summary>
         protected abstract IEnumerable<(Event e, EventInfo info)> GetInboxEvents();
     }

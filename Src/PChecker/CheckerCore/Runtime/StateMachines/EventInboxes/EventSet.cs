@@ -12,9 +12,11 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
     internal sealed class EventSet : EventInbox
     {
         /// <summary>
-        /// The internal set that contains events with their metadata.
+        /// The internal list that contains events with their metadata. List is 
+        /// used, as opposed to HashSet, to ensure order of enabled events is 
+        /// deterministic. 
         /// </summary>
-        private readonly HashSet<(Event e, EventInfo info)> Set;
+        private readonly List<(Event e, EventInfo info)> Events;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="EventSet"/> class.
@@ -22,13 +24,13 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         internal EventSet(IStateMachineManager stateMachineManager, StateMachine stateMachine)
             : base(stateMachineManager, stateMachine)
         {
-            Set = new HashSet<(Event, EventInfo)>();
+            Events = new();
         }
 
         /// <inheritdoc/>
         protected override void AddEventToInbox(Event e, EventInfo info)
         {
-            Set.Add((e, info));
+            Events.Add((e, info));
         }
 
         /// <inheritdoc/>
@@ -37,35 +39,35 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
             // With event set semantics, ignoring and deferring events are equivalent. 
             // Ignored events should not be removed because the scheduler may want to 
             // delay their delivery until later. 
-            HashSet<(Event e, EventInfo info)> enabledEvents = new(
-                Set.Where(x => !IsEventIgnored(x) && !IsEventDeferred(x)));
+            List<(Event e, EventInfo info)> enabledEvents = new(
+                Events.Where(x => !IsEventIgnored(x) && !IsEventDeferred(x)));
             return enabledEvents;
         }
 
         /// <inheritdoc/>
         protected override void RemoveChosenEvent((Event e, EventInfo info) chosenEvent)
         {
-            Set.Remove(chosenEvent);
+            Events.Remove(chosenEvent);
         }
 
         /// <inheritdoc/>
         protected override IEnumerable<(Event e, EventInfo info)> GetReceivedEvents(Dictionary<Type, Func<Event, bool>> eventWaitTypes)
         {
-            HashSet<(Event e, EventInfo info)> receivedEvents = new(
-                Set.Where(x => IsWaitedEvent(x.e, eventWaitTypes)));
+            List<(Event e, EventInfo info)> receivedEvents = new(
+                Events.Where(x => IsWaitedEvent(x.e, eventWaitTypes)));
             return receivedEvents;
         }
 
         /// <inheritdoc/>
         protected override void ClearInbox()
         {
-            Set.Clear();
+            Events.Clear();
         }
 
         /// <inheritdoc/>
         protected override IEnumerable<(Event e, EventInfo info)> GetInboxEvents()
         {
-            return Set;
+            return Events;
         }
     }
 }

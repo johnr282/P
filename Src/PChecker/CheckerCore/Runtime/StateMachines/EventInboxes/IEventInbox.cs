@@ -45,7 +45,8 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
 
         /// <summary>
         /// Returns the currently enabled events in the inbox, along with their optional metadata.
-        /// Must not modify inbox state.
+        /// Must not modify inbox state. To allow for deterministic replay, returned events must 
+        /// be ordered deterministically.
         /// </summary>
         (InboxStatus status, IEnumerable<(Event e, EventInfo info)> events) GetEnabledEvents();
 
