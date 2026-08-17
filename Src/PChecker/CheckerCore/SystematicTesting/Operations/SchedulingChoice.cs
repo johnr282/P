@@ -39,16 +39,50 @@ namespace PChecker.SystematicTesting.Operations
     }
 
     /// <summary>
-    /// Represents the initial execution of a newly created state machine.
+    /// Represents the initialization of a newly created state machine, which is 
+    /// the execution of its start state's entry function. Initialization choices
+    /// must be distinct from normal event handling choices (<see cref="DeliverEventChoice"/>, 
+    /// <see cref="ResumeHandlerChoice"/>) because initializing a state machine with 
+    /// event e and handling event e after initialization are distinct behaviors. 
     /// </summary>
-    internal sealed class StartStateMachineChoice : SchedulingChoice<StateMachineOperation>
+    internal sealed class InitializeChoice : SchedulingChoice<StateMachineOperation>
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="StartStateMachineChoice"/> class.
+        /// Event passed to the initial entry function; no EventInfo because initial
+        /// event has no meaningful origin. 
         /// </summary>
-        internal StartStateMachineChoice(StateMachineOperation operation)
+        public Event InitialEvent { get; }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="InitializeChoice"/> class.
+        /// </summary>
+        internal InitializeChoice(StateMachineOperation operation,
+            Event initialEvent)
             : base(operation)
         {
+            InitialEvent = initialEvent;
+        }
+    }
+
+    /// <summary>
+    /// Represents resuming execution of the entry function of a state machine's
+    /// initial state.
+    /// </summary>
+    internal sealed class ResumeInitializationChoice : SchedulingChoice<StateMachineOperation>
+    {
+        /// <summary>
+        /// Event passed to the initial entry function. 
+        /// </summary>
+        public Event InitialEvent { get; }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="InitializeChoice"/> class.
+        /// </summary>
+        internal ResumeInitializationChoice(StateMachineOperation operation,
+            Event initialEvent)
+            : base(operation)
+        {
+            InitialEvent = initialEvent;
         }
     }
 
@@ -111,16 +145,23 @@ namespace PChecker.SystematicTesting.Operations
         public (Event e, EventInfo info) EventToDeliver { get; }
 
         /// <summary>
+        /// True if receive occurred during initialization. 
+        /// </summary>
+        public bool InInitialization { get; }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="CompleteReceiveChoice"/> class.
         /// </summary>
         internal CompleteReceiveChoice(
             StateMachineOperation operation,
             (Event e, EventInfo info) eventToResume, 
-            (Event e, EventInfo info) eventToDeliver)
+            (Event e, EventInfo info) eventToDeliver,
+            bool inInitialization)
             : base(operation)
         {
             EventToResume = eventToResume;
             EventToDeliver = eventToDeliver;
+            InInitialization = inInitialization;
         }
     }
 

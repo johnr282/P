@@ -10,10 +10,10 @@
       "commandLineArgs": "check -tc tcMajorityElection1\r\n -s 100 -ms 1000",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
     },
-    "AlonBug": {
+    "RegressionTest": {
       "commandName": "Project",
-      "commandLineArgs": "check net8.0/AlonBug.dll -tc DefaultImpl -s 1 --max-steps 1000 --seed 1262678081 -v -o PCheckerOutput",
-      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\P\\Tst\\temp_builds\\PChecker\\RegressionTests\\Feature1SMLevelDecls\\DynamicError\\AlonBug\\PChecker"
+      "commandLineArgs": "check net8.0/EntryNamedFunction.dll -tc DefaultImpl -s 1 --max-steps 1000 --seed 1262678081 -v -o PCheckerOutput",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\P\\Tst\\temp_builds\\PChecker\\RegressionTests\\Feature1SMLevelDecls\\DynamicError\\EntryNamedFunction\\PChecker"
     }
   }
 }

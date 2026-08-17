@@ -448,8 +448,8 @@ namespace PChecker.SystematicTesting
         {
             AssertExpectedCallerStateMachine(creator, "CreateStateMachine");
 
-            var stateMachine = CreateStateMachine(id, type, name, creator);
-            RunStateMachineEventHandler(stateMachine, initialEvent, true, null);
+            var stateMachine = CreateStateMachine(id, type, name, creator, initialEvent);
+            RunStateMachineEventHandler(stateMachine, true, null);
             return stateMachine.Id;
         }
 
@@ -477,8 +477,8 @@ namespace PChecker.SystematicTesting
             Assert(creator != null, "Only a state machine can call 'CreateStateMachineAndExecuteAsync': avoid calling " +
                                     "it directly from the test method; instead call it through a test driver state machine.");
 
-            var stateMachine = CreateStateMachine(id, type, name, creator);
-            RunStateMachineEventHandler(stateMachine, initialEvent, true, creator);
+            var stateMachine = CreateStateMachine(id, type, name, creator, initialEvent);
+            RunStateMachineEventHandler(stateMachine, true, creator);
 
             // Wait until the state machine reaches quiescence.
             await creator.ReceiveEventAsync(typeof(QuiescentEvent), rev => (rev as QuiescentEvent).StateMachineId == stateMachine.Id);
@@ -488,7 +488,8 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// Creates a new state machine of the specified <see cref="Type"/>.
         /// </summary>
-        private StateMachine CreateStateMachine(StateMachineId id, Type type, string name, StateMachine creator)
+        private StateMachine CreateStateMachine(StateMachineId id, Type type, string name, 
+            StateMachine creator, Event initialEvent)
         {
             Assert(type.IsSubclassOf(typeof(StateMachine)), "Type '{0}' is not a state machine.", type.FullName);
 
@@ -506,7 +507,7 @@ namespace PChecker.SystematicTesting
             IStateMachineManager stateMachineManager = new StateMachineManager(this, stateMachine);
 
             IEventInbox eventQueue = new EventQueue(stateMachineManager, stateMachine);
-            stateMachine.Configure(this, id, stateMachineManager, eventQueue);
+            stateMachine.Configure(this, id, stateMachineManager, eventQueue, initialEvent);
             stateMachine.SetupEventHandlers();
             stateMachine.self = new PMachineValue(id, stateMachine.receives.ToList());
             stateMachine.interfaceName = "I_" + name;
@@ -577,7 +578,7 @@ namespace PChecker.SystematicTesting
             var enqueueStatus = EnqueueEvent(targetId, e, sender, out var target);
             if (enqueueStatus is AddEventStatus.EventHandlerNotRunning)
             {
-                RunStateMachineEventHandler(target, null, false, null);
+                RunStateMachineEventHandler(target, false, null);
             }
         }
 
@@ -594,7 +595,7 @@ namespace PChecker.SystematicTesting
             var enqueueStatus = EnqueueEvent(targetId, e, sender, out var target);
             if (enqueueStatus is AddEventStatus.EventHandlerNotRunning)
             {
-                RunStateMachineEventHandler(target, null, false, sender);
+                RunStateMachineEventHandler(target, false, sender);
 
                 // Wait until the state machine reaches quiescence.
                 await sender.ReceiveEventAsync(typeof(QuiescentEvent), rev => (rev as QuiescentEvent).StateMachineId == targetId);
@@ -661,10 +662,9 @@ namespace PChecker.SystematicTesting
         /// This is a fire-and-forget invocation.
         /// </summary>
         /// <param name="stateMachine">The state machine that executes this event handler.</param>
-        /// <param name="initialEvent">Optional event for initializing the state machine.</param>
         /// <param name="isFresh">If true, then this is a new state machine.</param>
         /// <param name="syncCaller">Caller state machine that is blocked for quiescence.</param>
-        private void RunStateMachineEventHandler(StateMachine stateMachine, Event initialEvent, bool isFresh, StateMachine syncCaller)
+        private void RunStateMachineEventHandler(StateMachine stateMachine, bool isFresh, StateMachine syncCaller)
         {
             var op = Scheduler.GetOperationWithId<StateMachineOperation>(stateMachine.Id.Value);
             op.OnEnabled();
@@ -681,7 +681,7 @@ namespace PChecker.SystematicTesting
 
                     if (isFresh)
                     {
-                        await stateMachine.InitializeAsync(initialEvent);
+                        await stateMachine.InitializeAsync();
                     }
 
                     await stateMachine.RunEventHandlerAsync();

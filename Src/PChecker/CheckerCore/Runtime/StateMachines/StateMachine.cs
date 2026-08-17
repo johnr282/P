@@ -123,6 +123,11 @@ namespace PChecker.Runtime.StateMachines
         internal bool IsEventHandlerInProgress => InProgressEvent != (null, null);
 
         /// <summary>
+        /// Event passed to entry function of start state.
+        /// </summary>
+        internal Event InitialEvent { get; private set; } = null;
+
+        /// <summary>
         /// Whether this state machine has a pending receive.
         /// </summary>
         internal bool IsReceivePending => Inbox.IsReceivePending;
@@ -138,9 +143,20 @@ namespace PChecker.Runtime.StateMachines
         internal bool IsHalted => CurrentStatus is Status.Halted;
 
         /// <summary>
-        /// Checks if the state machine has not been executed yet.
+        /// Checks if the state machine has not been initialized yet.
         /// </summary>
-        internal bool IsInitialExecutionPending => CurrentStatus is Status.InitialExecutionPending;
+        internal bool IsInitializationPending => CurrentStatus is Status.InitializationPending;
+
+        /// <summary>
+        /// Checks if initialization has started but not finished.
+        /// </summary>
+        internal bool IsInitializing => CurrentStatus is Status.Initializing;
+
+        /// <summary>
+        /// Checks if state machine is not halting or halted.
+        /// </summary>
+        private bool IsActive => CurrentStatus != Status.Halting && 
+            CurrentStatus != Status.Halted;
 
         /// <summary>
         /// Checks if a default handler is available.
@@ -305,7 +321,7 @@ namespace PChecker.Runtime.StateMachines
         /// </summary>
         protected StateMachine()
         {
-            CurrentStatus = Status.InitialExecutionPending;
+            CurrentStatus = Status.InitializationPending;
             CurrentStateName = default;
             IsDefaultHandlerAvailable = false;
             EventHandlerMap = EmptyEventHandlerMap;
@@ -315,12 +331,14 @@ namespace PChecker.Runtime.StateMachines
         /// <summary>
         /// Configures the state machine.
         /// </summary>
-        internal void Configure(ControlledRuntime runtime, StateMachineId id, IStateMachineManager manager, IEventInbox inbox)
+        internal void Configure(ControlledRuntime runtime, StateMachineId id, 
+            IStateMachineManager manager, IEventInbox inbox, Event initialEvent)
         {
             Runtime = runtime;
             Id = id;
             Manager = manager;
             Inbox = inbox;
+            InitialEvent = initialEvent;
             VectorTime = new VectorTime(Id);
         }
         
@@ -474,18 +492,23 @@ namespace PChecker.Runtime.StateMachines
         /// <summary>
         /// Initializes the state machine with the specified optional event.
         /// </summary>
-        /// <param name="initialEvent">Optional event used for initialization.</param>
-        internal async Task InitializeAsync(Event initialEvent)
+        internal async Task InitializeAsync()
         {
-            CurrentStatus = Status.Active;
+            CurrentStatus = Status.Initializing;
+
             // Invoke the custom initializer, if there is one.
-            await InvokeUserCallbackAsync(UserCallbackType.OnInitialize, initialEvent);
+            await InvokeUserCallbackAsync(UserCallbackType.OnInitialize, InitialEvent);
 
             // Execute the entry action of the start state, if there is one.
-            await ExecuteCurrentStateOnEntryAsync(initialEvent);
+            await ExecuteCurrentStateOnEntryAsync(InitialEvent);
+
             if (CurrentStatus is Status.Halting)
             {
-                await HaltAsync(initialEvent);
+                await HaltAsync(InitialEvent);
+            }
+            else if (CurrentStatus is Status.Initializing)
+            {
+                CurrentStatus = Status.Initialized;
             }
         }
         
@@ -575,7 +598,7 @@ namespace PChecker.Runtime.StateMachines
         /// <returns>The received event.</returns>
         public Task<Event> ReceiveEventAsync(Type eventType, Func<Event, bool> predicate = null)
         {
-            Assert(CurrentStatus is Status.Active, "{0} invoked ReceiveEventAsync while halting.", Id);
+            Assert(IsActive, "{0} invoked ReceiveEventAsync while halting.", Id);
             Runtime.NotifyReceiveCalled(this);
             return Inbox.ReceiveEventAsync(eventType, predicate);
         }
@@ -587,7 +610,7 @@ namespace PChecker.Runtime.StateMachines
         /// <returns>The received event.</returns>
         public Task<Event> ReceiveEventAsync(params Type[] eventTypes)
         {
-            Assert(CurrentStatus is Status.Active, "{0} invoked ReceiveEventAsync while halting.", Id);
+            Assert(IsActive, "{0} invoked ReceiveEventAsync while halting.", Id);
             Runtime.NotifyReceiveCalled(this);
             return Inbox.ReceiveEventAsync(eventTypes);
         }
@@ -600,7 +623,7 @@ namespace PChecker.Runtime.StateMachines
         /// <returns>The received event.</returns>
         public Task<Event> ReceiveEventAsync(params Tuple<Type, Func<Event, bool>>[] events)
         {
-            Assert(CurrentStatus is Status.Active, "{0} invoked ReceiveEventAsync while halting.", Id);
+            Assert(IsActive, "{0} invoked ReceiveEventAsync while halting.", Id);
             Runtime.NotifyReceiveCalled(this);
             return Inbox.ReceiveEventAsync(events);
         }
@@ -663,7 +686,7 @@ namespace PChecker.Runtime.StateMachines
 
                 Inbox.NotifyChosenEvent(nextEvent);
 
-                if (CurrentStatus is Status.Active)
+                if (IsActive)
                 {   
                     InProgressEvent = nextEvent;
                     try
@@ -979,14 +1002,19 @@ namespace PChecker.Runtime.StateMachines
         private protected enum Status
         {
             /// <summary>
-            /// The state machine has been created but not executed yet.
+            /// The state machine has been created but not initialized yet.
             /// </summary>
-            InitialExecutionPending = 0,
+            InitializationPending = 0,
 
             /// <summary>
-            /// The state machine is active.
+            /// The state machine is executing its initial state's entry function.
             /// </summary>
-            Active,
+            Initializing,
+
+            /// <summary>
+            /// The state machine is initialized and ready to handle events.
+            /// </summary>
+            Initialized,
 
             /// <summary>
             /// The state machine is halting.
@@ -1026,7 +1054,7 @@ namespace PChecker.Runtime.StateMachines
         /// <param name="e">The event to raise.</param>
         public void RaiseEvent(Event e)
         {
-            Assert(CurrentStatus is Status.Active, "{0} invoked RaiseEvent while halting.", Id);
+            Assert(IsActive, "{0} invoked RaiseEvent while halting.", Id);
             Assert(e != null, $"{Id} is raising a null event in state {CurrentStateName}");
             CheckDanglingTransition();
             PendingTransition = new Transition(Transition.Type.RaiseEvent, default, e);
@@ -1079,7 +1107,7 @@ namespace PChecker.Runtime.StateMachines
         /// <param name="state">Type of the state.</param>
         protected void RaiseGotoStateEvent(Type state)
         {
-            Assert(CurrentStatus is Status.Active, "{0} invoked GotoState while halting.", Id);
+            Assert(IsActive, "{0} invoked GotoState while halting.", Id);
             Assert(StateTypeCache[GetType()].Any(val => val.DeclaringType.Equals(state.DeclaringType) && val.Name.Equals(state.Name)),
                 "{0} is trying to transition to non-existing state '{1}'.", Id, state.Name);
             CheckDanglingTransition();
@@ -1099,7 +1127,7 @@ namespace PChecker.Runtime.StateMachines
         /// </remarks>
         protected void RaiseHaltEvent()
         {
-            Assert(CurrentStatus is Status.Active, "{0} invoked Halt while halting.", Id);
+            Assert(IsActive, "{0} invoked Halt while halting.", Id);
             CurrentStatus = Status.Halting;
             CheckDanglingTransition();
             PendingTransition = new Transition(Transition.Type.Halt, null, default);
@@ -1127,7 +1155,7 @@ namespace PChecker.Runtime.StateMachines
 
                     var currentStateName = currentState.GetType().Name;
                     await InvokeUserCallbackAsync(UserCallbackType.OnEventUnhandled, e, currentStateName);
-                    if (CurrentStatus is Status.Active)
+                    if (IsActive)
                     {
                         // If the event cannot be handled then report an error, else halt gracefully.
                         var ex = new UnhandledEventException(e, currentStateName, "Unhandled Event");
@@ -1164,7 +1192,7 @@ namespace PChecker.Runtime.StateMachines
                     {
                         // If the current state cannot handle the event.
                         await ExecuteCurrentStateOnExitAsync(null, e);
-                        if (CurrentStatus is Status.Active)
+                        if (IsActive)
                         {
                             Runtime.LogWriter.LogPopStateUnhandledEvent(Id, CurrentStateName, e);
                             EventHandlerMap = EmptyEventHandlerMap;
@@ -1268,7 +1296,7 @@ namespace PChecker.Runtime.StateMachines
 
             // Invokes the exit action of the event handler,
             // if there is one available.
-            if (eventHandlerExitActionName != null && CurrentStatus is Status.Active)
+            if (eventHandlerExitActionName != null && IsActive)
             {
                 var eventHandlerExitAction = StateMachineActionMap[eventHandlerExitActionName];
                 Runtime.NotifyInvokedOnExitAction(this, eventHandlerExitAction.MethodInfo, e);
@@ -1356,7 +1384,7 @@ namespace PChecker.Runtime.StateMachines
 
             // The state machine performs the on exit action of the current state.
             await ExecuteCurrentStateOnExitAsync(onExitActionName, e);
-            if (CurrentStatus is Status.Active)
+            if (IsActive)
             {
                 // The state machine transitions to the new state.
                 var nextState = StateInstanceCache[GetType()].First(val => val.GetType().Equals(s));

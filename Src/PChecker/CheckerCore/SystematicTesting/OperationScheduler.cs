@@ -283,25 +283,42 @@ namespace PChecker.SystematicTesting
             var choices = new List<SchedulingChoice>();
             var machine = machineOp.StateMachine;
 
-            if (machine.IsInitialExecutionPending)
+            // Note: Because there is no scheduling point between a state transition
+            // and the entry function of the new state, entry functions (apart 
+            // from initialization) can be considered part of the event handler
+            // that caused the transition
+
+            if (machine.IsInitializationPending)
             {
-                choices.Add(new StartStateMachineChoice(machineOp));
+                choices.Add(new InitializeChoice(machineOp, machine.InitialEvent));
             }
-            else if (machine.IsEventHandlerInProgress)
+            else if (machine.IsInitializing || machine.IsEventHandlerInProgress)
             {
                 if (machine.IsReceivePending)
                 {
+                    var eventToResume = machine.IsInitializing
+                        ? (machine.InitialEvent, null)
+                        : machine.InProgressEvent;
+
                     var receiveEvents = machine.GetEnabledEvents();
                     foreach (var e in receiveEvents)
                     {
                         choices.Add(new CompleteReceiveChoice(
-                            machineOp, machine.InProgressEvent, e));
+                            machineOp, eventToResume, e, machine.IsInitializing));
                     }
                 }
                 else
                 {
-                    choices.Add(new ResumeHandlerChoice(
-                        machineOp, machine.InProgressEvent));
+                    if (machine.IsInitializing)
+                    {
+                        choices.Add(new ResumeInitializationChoice(
+                            machineOp, machine.InitialEvent));
+                    }
+                    else
+                    {
+                        choices.Add(new ResumeHandlerChoice(
+                            machineOp, machine.InProgressEvent));
+                    }
                 }
             }
             else
