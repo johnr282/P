@@ -283,7 +283,11 @@ namespace PChecker.SystematicTesting
             var choices = new List<SchedulingChoice>();
             var machine = machineOp.StateMachine;
 
-            if (machine.IsEventHandlerInProgress)
+            if (machine.IsInitialExecutionPending)
+            {
+                choices.Add(new StartStateMachineChoice(machineOp));
+            }
+            else if (machine.IsEventHandlerInProgress)
             {
                 if (machine.IsReceivePending)
                 {

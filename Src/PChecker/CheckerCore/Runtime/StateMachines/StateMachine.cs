@@ -136,7 +136,12 @@ namespace PChecker.Runtime.StateMachines
         /// Checks if the state machine is halted.
         /// </summary>
         internal bool IsHalted => CurrentStatus is Status.Halted;
-        
+
+        /// <summary>
+        /// Checks if the state machine has not been executed yet.
+        /// </summary>
+        internal bool IsInitialExecutionPending => CurrentStatus is Status.InitialExecutionPending;
+
         /// <summary>
         /// Checks if a default handler is available.
         /// </summary>
@@ -300,7 +305,7 @@ namespace PChecker.Runtime.StateMachines
         /// </summary>
         protected StateMachine()
         {
-            CurrentStatus = Status.Active;
+            CurrentStatus = Status.InitialExecutionPending;
             CurrentStateName = default;
             IsDefaultHandlerAvailable = false;
             EventHandlerMap = EmptyEventHandlerMap;
@@ -472,6 +477,7 @@ namespace PChecker.Runtime.StateMachines
         /// <param name="initialEvent">Optional event used for initialization.</param>
         internal async Task InitializeAsync(Event initialEvent)
         {
+            CurrentStatus = Status.Active;
             // Invoke the custom initializer, if there is one.
             await InvokeUserCallbackAsync(UserCallbackType.OnInitialize, initialEvent);
 
@@ -973,9 +979,14 @@ namespace PChecker.Runtime.StateMachines
         private protected enum Status
         {
             /// <summary>
+            /// The state machine has been created but not executed yet.
+            /// </summary>
+            InitialExecutionPending = 0,
+
+            /// <summary>
             /// The state machine is active.
             /// </summary>
-            Active = 0,
+            Active,
 
             /// <summary>
             /// The state machine is halting.

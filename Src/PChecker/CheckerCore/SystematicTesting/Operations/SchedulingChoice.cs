@@ -39,6 +39,20 @@ namespace PChecker.SystematicTesting.Operations
     }
 
     /// <summary>
+    /// Represents the initial execution of a newly created state machine.
+    /// </summary>
+    internal sealed class StartStateMachineChoice : SchedulingChoice<StateMachineOperation>
+    {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StartStateMachineChoice"/> class.
+        /// </summary>
+        internal StartStateMachineChoice(StateMachineOperation operation)
+            : base(operation)
+        {
+        }
+    }
+
+    /// <summary>
     /// Represents delivering an event to a state machine and executing the 
     /// corresponding handler.
     /// </summary>
