@@ -7,7 +7,7 @@ using System.IO;
 using System.Runtime.Serialization;
 using PChecker.Utilities;
 
-namespace PChecker
+namespace PChecker.Configuration
 {
 #pragma warning disable CA1724 // Type names should not match namespaces
     /// <summary>
@@ -71,6 +71,12 @@ namespace PChecker
         /// </summary>
         [DataMember]
         public bool ListTestCases;
+
+        /// <summary>
+        /// The event inbox type to use.
+        /// </summary>
+        [DataMember]
+        public InboxType InboxType { get; set; }
 
         /// <summary>
         /// The systematic testing strategy to use.
@@ -302,6 +308,7 @@ namespace PChecker
             TestCaseName = string.Empty;
             ListTestCases = false;
 
+            InboxType = InboxType.EventQueue;
             SchedulingStrategy = "random";
             TestingIterations = 1;
             RandomGeneratorSeed = null;
@@ -342,6 +349,15 @@ namespace PChecker
         public static CheckerConfiguration Create()
         {
             return new CheckerConfiguration();
+        }
+
+        /// <summary>
+        /// Updates the checkerConfiguration to use the given inbox type.
+        /// </summary>
+        public CheckerConfiguration WithInboxType(InboxType inboxType)
+        {
+            InboxType = inboxType;
+            return this;
         }
 
         /// <summary>
@@ -517,8 +533,8 @@ namespace PChecker
         }
 
         /// <summary>
-        /// Set the <see cref="OutputDirectory"/> to either the user-specified <see cref="CheckerConfiguration.OutputPath"/>
-        /// or to a unique output directory name in the same directory as <see cref="CheckerConfiguration.AssemblyToBeAnalyzed"/>
+        /// Set the <see cref="OutputDirectory"/> to either the user-specified <see cref="OutputPath"/>
+        /// or to a unique output directory name in the same directory as <see cref="AssemblyToBeAnalyzed"/>
         /// and starting with its name.
         /// </summary>
         public void SetOutputDirectory()

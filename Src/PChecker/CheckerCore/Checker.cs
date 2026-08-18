@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PChecker.Configuration;
 using PChecker.IO.Debugging;
 using PChecker.IO.Logging;
 using PChecker.SystematicTesting;

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
+using PChecker.Configuration;
 using PChecker.IO.Debugging;
 using PChecker.SystematicTesting;
 using PChecker.Utilities;

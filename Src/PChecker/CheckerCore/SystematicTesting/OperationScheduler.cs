@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using PChecker.Configuration;
 using PChecker.Exceptions;
 using PChecker.Runtime.StateMachines.EventInboxes;
 using PChecker.SystematicTesting.Operations;

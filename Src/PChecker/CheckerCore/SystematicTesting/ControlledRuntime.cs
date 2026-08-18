@@ -12,6 +12,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using PChecker.Configuration;
 using PChecker.Coverage;
 using PChecker.Exceptions;
 using PChecker.Random;
@@ -505,9 +506,9 @@ namespace PChecker.SystematicTesting
             
             var stateMachine = Create(type);
             IStateMachineManager stateMachineManager = new StateMachineManager(this, stateMachine);
+            IEventInbox eventInbox = CreateInbox(stateMachineManager, stateMachine);
 
-            IEventInbox eventQueue = new EventQueue(stateMachineManager, stateMachine);
-            stateMachine.Configure(this, id, stateMachineManager, eventQueue, initialEvent);
+            stateMachine.Configure(this, id, stateMachineManager, eventInbox, initialEvent);
             stateMachine.SetupEventHandlers();
             stateMachine.self = new PMachineValue(id, stateMachine.receives.ToList());
             stateMachine.interfaceName = "I_" + name;
@@ -522,6 +523,23 @@ namespace PChecker.SystematicTesting
             LogWriter.LogCreateStateMachine(id, creator?.Id.Name, creator?.Id.Type);
 
             return stateMachine;
+        }
+
+        /// <summary>
+        /// Creates event inbox of correct type based on checker configuration.
+        /// </summary>
+        private IEventInbox CreateInbox(IStateMachineManager manager, StateMachine machine)
+        {
+            switch (CheckerConfiguration.InboxType)
+            {
+                case InboxType.EventQueue:
+                    return new EventQueue(manager, machine);
+                case InboxType.EventSet:
+                    return new EventSet(manager, machine);
+                default:
+                    throw new PInternalException(
+                        $"Unsupported inbox type '{CheckerConfiguration.InboxType}'.");
+            }
         }
         
         /// <summary>

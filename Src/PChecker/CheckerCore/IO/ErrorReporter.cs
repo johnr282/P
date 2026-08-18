@@ -3,6 +3,7 @@
 
 using System;
 using System.IO;
+using PChecker.Configuration;
 using PChecker.IO.Debugging;
 using PChecker.IO.Logging;
 

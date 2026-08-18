@@ -15,6 +15,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
+using PChecker.Configuration;
 using PChecker.Coverage;
 using PChecker.Feedback;
 using PChecker.Generator.Object;
@@ -419,7 +420,8 @@ namespace PChecker.SystematicTesting
             }
 
             Logger.WriteLine($"... Checker is " +
-                             $"using '{_checkerConfiguration.SchedulingStrategy}' strategy{options}.");
+                             $"using '{_checkerConfiguration.InboxType.ToString()}' inbox type and " +
+                             $"'{_checkerConfiguration.SchedulingStrategy}' strategy{options}.");
 
             return new System.Threading.Tasks.Task(() =>
             {

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using PChecker.Configuration;
 using PChecker.IO.Logging;
 using PChecker.Runtime.Events;
 using PChecker.Runtime.StateMachines;

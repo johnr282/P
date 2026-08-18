@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using PChecker;
+using PChecker.Configuration;
 using PChecker.IO.Debugging;
 using Plang.Parser;
 
@@ -34,6 +34,28 @@ namespace Plang.Options
                     return CheckerMode.PEx;
                 default:
                     throw new Exception($"Invalid checker mode '{mode}'.");
+            }
+        }
+
+        /// <summary>
+        /// The accepted values for <c>--inbox-type</c>.
+        /// </summary>
+        internal static readonly string[] InboxTypes = { "eventqueue", "eventset" };
+
+        /// <summary>
+        /// Maps a <c>--inbox-type</c> value to its <see cref="InboxType"/>. Throws if the mode is
+        /// not one of <see cref="InboxTypes"/>.
+        /// </summary>
+        internal static InboxType ParseInboxType(string type)
+        {
+            switch (type.ToLowerInvariant())
+            {
+                case "eventqueue":
+                    return InboxType.EventQueue;
+                case "eventset":
+                    return InboxType.EventSet;
+                default:
+                    throw new Exception($"Invalid inbox type '{type}'.");
             }
         }
 
@@ -106,6 +128,9 @@ namespace Plang.Options
             advancedGroup.AddArgument("jvm-args", null, "Specify a concatenated list of JVM arguments to pass, each starting with a colon").IsHidden = true;
             advancedGroup.AddArgument("checker-args", null, "Specify a concatenated list of additional checker arguments to pass, each starting with a colon").IsHidden = true;
             advancedGroup.AddArgument("psym-args", null, "Specify a concatenated list of additional PSym-specific arguments to pass, each starting with a colon").IsHidden = true;
+            var inboxTypes = advancedGroup.AddArgument("inbox-type", null, "Specify the event inbox type for state machines. Options are eventqueue (default) or eventset", typeof(string));
+            inboxTypes.IsHidden = true;
+            inboxTypes.AllowedValues = InboxTypes.ToList();
         }
 
         /// <summary>
@@ -310,6 +335,9 @@ namespace Plang.Options
                     break;
                 case "pproj":
                     // do nothing, since already configured through UpdateConfigurationWithPProjectFile
+                    break;
+                case "inbox-type":
+                    checkerConfiguration.InboxType = ParseInboxType((string)option.Value);
                     break;
                 default:
                     throw new Exception(string.Format("Unhandled parsed argument: '{0}'", option.LongName));

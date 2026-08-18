@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Text;
+using PChecker.Configuration;
 using PChecker.Coverage;
 using PChecker.Utilities;
 

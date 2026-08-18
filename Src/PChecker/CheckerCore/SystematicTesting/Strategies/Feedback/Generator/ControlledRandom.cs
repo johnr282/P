@@ -1,4 +1,5 @@
 using System;
+using PChecker.Configuration;
 using PChecker.Generator.Mutator;
 using PChecker.Random;
 

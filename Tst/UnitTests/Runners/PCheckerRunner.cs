@@ -5,7 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Threading;
-using PChecker;
+using PChecker.Configuration;
 using PChecker.SystematicTesting;
 using Plang;
 using Plang.Compiler;

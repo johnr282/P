@@ -1,7 +1,7 @@
 using NUnit.Framework;
 using Plang.Compiler;
 using Plang.Options;
-using PChecker;
+using PChecker.Configuration;
 
 namespace UnitTests
 {

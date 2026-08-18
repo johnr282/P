@@ -1,4 +1,4 @@
-namespace PChecker;
+namespace PChecker.Configuration;
 
 /// <summary>
 /// P Checker exploration modes

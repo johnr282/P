@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using PChecker.Configuration;
 using PChecker.IO.Debugging;
 using PChecker.IO.Logging;
 

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Xml.Linq;
-using PChecker;
+using PChecker.Configuration;
 using PChecker.IO.Debugging;
 using Plang.Compiler;
 
