@@ -299,7 +299,7 @@ namespace PChecker.Runtime.StateMachines
             AnnounceInternal(@event);
         }
 
-        private void AnnounceInternal(Event ev)
+        internal void AnnounceInternal(Event ev)
         {
             Assert(ev != null, $"Incorrect use of announce by Machine {Id.Name} in state {CurrentStateName}. Machine cannot announce a null event");
             if (!PModule.monitorMap.ContainsKey(interfaceName))
@@ -582,9 +582,10 @@ namespace PChecker.Runtime.StateMachines
                 $"Event {ev.GetType().Name} is not in the sends set of the Machine {GetType().Name}");
             Assert(target.Permissions.Contains(ev.GetType().Name),
                 $"Event {ev.GetType().Name} is not in the permissions set of the target machine {target.Id}");
-            AnnounceInternal(ev);
             // Update vector clock
             VectorTime.Increment();
+            // JR TODO: If the timeline assume that sends are reliable, then this
+            // should be moved to where the scheduler actually delivers the event.
             BehavioralObserver.AddToCurrentTimeline(ev, BehavioralObserver.EventType.SEND, VectorTime);
             Runtime.SendEvent(target.Id, ev, this);
         }

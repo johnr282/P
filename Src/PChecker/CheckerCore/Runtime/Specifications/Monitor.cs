@@ -320,57 +320,46 @@ namespace PChecker.Runtime.Specifications
                 return;
             }
 
-            while (true)
+            // If current state cannot handle the event report an error and exit.
+            if (!CanHandleEvent(e.GetType()))
             {
-                if (ActiveState is null)
-                {
-                    // If the event cannot be handled, then report an error and exit.
-                    Assert(false, "{0} received event '{1}' that cannot be handled.",
-                        GetType().FullName, e.GetType().FullName);
-                }
+                Runtime.NotifyExitedState(this);
+                Assert(false, "{0} received event '{1}' that cannot be handled.",
+                    GetType().FullName, e.GetType().FullName);
+                return;
+            }
 
-                // If current state cannot handle the event then null the state.
-                if (!CanHandleEvent(e.GetType()))
+            if (e.GetType() == typeof(GotoStateEvent))
+            {
+                // Checks if the event is a goto state event.
+                var targetState = (e as GotoStateEvent).State;
+                GotoState(targetState, null, e);
+            }
+            else if (EventHandlers.ContainsKey(e.GetType()))
+            {
+                // Checks if the event can trigger an action.
+                var handler = EventHandlers[e.GetType()];
+                if (handler is ActionEventHandlerDeclaration action)
                 {
-                    Runtime.NotifyExitedState(this);
-                    ActiveState = null;
-                    continue;
+                    Do(action.Name, e);
                 }
-
-                if (e.GetType() == typeof(GotoStateEvent))
+                else if (handler is GotoStateTransition transition)
                 {
-                    // Checks if the event is a goto state event.
-                    var targetState = (e as GotoStateEvent).State;
-                    GotoState(targetState, null, e);
+                    GotoState(transition.TargetState, transition.Lambda, e);
                 }
-                else if (EventHandlers.ContainsKey(e.GetType()))
+            }
+            else if (EventHandlers.ContainsKey(typeof(WildCardEvent)))
+            {
+                // Checks if the event can trigger an action.
+                var handler = EventHandlers[typeof(WildCardEvent)];
+                if (handler is ActionEventHandlerDeclaration action)
                 {
-                    // Checks if the event can trigger an action.
-                    var handler = EventHandlers[e.GetType()];
-                    if (handler is ActionEventHandlerDeclaration action)
-                    {
-                        Do(action.Name, e);
-                    }
-                    else if (handler is GotoStateTransition transition)
-                    {
-                        GotoState(transition.TargetState, transition.Lambda, e);
-                    }
+                    Do(action.Name, e);
                 }
-                else if (EventHandlers.ContainsKey(typeof(WildCardEvent)))
+                else if (handler is GotoStateTransition transition)
                 {
-                    // Checks if the event can trigger an action.
-                    var handler = EventHandlers[typeof(WildCardEvent)];
-                    if (handler is ActionEventHandlerDeclaration action)
-                    {
-                        Do(action.Name, e);
-                    }
-                    else if (handler is GotoStateTransition transition)
-                    {
-                        GotoState(transition.TargetState, transition.Lambda, e);
-                    }
+                    GotoState(transition.TargetState, transition.Lambda, e);
                 }
-
-                break;
             }
         }
 

@@ -12,8 +12,8 @@
     },
     "RegressionTest": {
       "commandName": "Project",
-      "commandLineArgs": "check net8.0/EntryNamedFunction.dll -tc DefaultImpl -s 1 --max-steps 1000 --seed 1262678081 -v -o PCheckerOutput",
-      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\P\\Tst\\temp_builds\\PChecker\\RegressionTests\\Feature1SMLevelDecls\\DynamicError\\EntryNamedFunction\\PChecker"
+      "commandLineArgs": "check net8.0/receive11.dll -tc DefaultImpl -s 4 --max-steps 1000 --seed 3243406786 -v -o PCheckerOutput",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\P\\Tst\\temp_builds\\PChecker\\RegressionTests\\Feature2Stmts\\Correct\\receive11\\PChecker"
     }
   }
 }

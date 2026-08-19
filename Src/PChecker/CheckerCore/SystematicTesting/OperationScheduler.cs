@@ -3,7 +3,9 @@
 
 using PChecker.Configuration;
 using PChecker.Exceptions;
+using PChecker.Runtime.StateMachines;
 using PChecker.Runtime.StateMachines.EventInboxes;
+using PChecker.Runtime.Events;
 using PChecker.SystematicTesting.Operations;
 using PChecker.SystematicTesting.Strategies;
 using PChecker.SystematicTesting.Traces;
@@ -173,13 +175,7 @@ namespace PChecker.SystematicTesting
             }
 
             LastSchedulingChoice = nextChoice;
-
-            // Notify state machine of receive completion if necessary
-            if (nextChoice is CompleteReceiveChoice receiveChoice)
-            {
-                var stateMachine = receiveChoice.Operation.StateMachine;
-                stateMachine.CompleteReceive(receiveChoice.EventToDeliver);
-            }
+            HandleEventDeliveryChoice(nextChoice);
 
             var nextOp = nextChoice.Operation;
             // JR TODO: Need to record the choice, not only the operation
@@ -332,6 +328,42 @@ namespace PChecker.SystematicTesting
             }
 
             return choices;
+        }
+
+        /// <summary>
+        /// Announces event deliveries to monitors and notifies state machine
+        /// of receive completions.
+        /// </summary>
+        private void HandleEventDeliveryChoice(SchedulingChoice choice)
+        {
+            if (choice is not CompleteReceiveChoice &&
+                choice is not DeliverEventChoice)
+            {
+                return;
+            }
+
+            Event deliveredEvent;
+            StateMachine machine;
+
+            if (choice is CompleteReceiveChoice receiveChoice)
+            {
+                machine = receiveChoice.Operation.StateMachine;
+                deliveredEvent = receiveChoice.EventToDeliver.e;
+
+                machine.CompleteReceive(receiveChoice.EventToDeliver);
+            }
+            else
+            {
+                var deliverChoice = (DeliverEventChoice)choice;
+                machine = deliverChoice.Operation.StateMachine;
+                deliveredEvent = deliverChoice.EventToDeliver.e;
+            }
+
+            // Only notify monitors of non-default events
+            if (!DefaultEvent.IsDefaultEvent(deliveredEvent))
+            {
+                machine.AnnounceInternal(deliveredEvent);
+            }
         }
 
         /// <summary>
