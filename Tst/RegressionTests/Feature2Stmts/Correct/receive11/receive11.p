@@ -6,6 +6,7 @@ event Unit;
 
 spec M observes E, F {
 	start state Init {
+		ignore F;
 		on E goto Next with (payload: int) { assert (payload == 10);}
 	}
 	
