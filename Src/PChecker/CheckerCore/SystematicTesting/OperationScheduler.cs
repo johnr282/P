@@ -17,6 +17,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Debug = PChecker.IO.Debugging.Debug;
+using PChecker.Runtime.Exceptions;
 
 namespace PChecker.SystematicTesting
 {
@@ -342,27 +343,33 @@ namespace PChecker.SystematicTesting
                 return;
             }
 
-            Event deliveredEvent;
-            StateMachine machine;
+            (Event e, EventInfo info) deliveredEvent;
 
             if (choice is CompleteReceiveChoice receiveChoice)
             {
-                machine = receiveChoice.Operation.StateMachine;
-                deliveredEvent = receiveChoice.EventToDeliver.e;
+                deliveredEvent = receiveChoice.EventToDeliver;
 
+                var machine = receiveChoice.Operation.StateMachine;
                 machine.CompleteReceive(receiveChoice.EventToDeliver);
             }
             else
             {
                 var deliverChoice = (DeliverEventChoice)choice;
-                machine = deliverChoice.Operation.StateMachine;
-                deliveredEvent = deliverChoice.EventToDeliver.e;
+                deliveredEvent = deliverChoice.EventToDeliver;
             }
 
             // Only notify monitors of non-default events
-            if (!DefaultEvent.IsDefaultEvent(deliveredEvent))
+            if (!DefaultEvent.IsDefaultEvent(deliveredEvent.e))
             {
-                machine.AnnounceInternal(deliveredEvent);
+                // Announce should be called through sender machine for logging purposes
+                var senderID = deliveredEvent.info.OriginInfo.SenderStateMachineId.Value;
+                var senderMachine = GetOperationWithId<StateMachineOperation>(senderID)?.StateMachine;
+                if (senderMachine == null)
+                {
+                    throw new PInternalException($"Sender machine with id '{senderID}' not found.");
+                }
+
+                senderMachine.AnnounceInternal(deliveredEvent.e);
             }
         }
 

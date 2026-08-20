@@ -323,7 +323,6 @@ namespace PChecker.Runtime.Specifications
             // If current state cannot handle the event report an error and exit.
             if (!CanHandleEvent(e.GetType()))
             {
-                Runtime.NotifyExitedState(this);
                 Assert(false, "{0} received event '{1}' that cannot be handled.",
                     GetType().FullName, e.GetType().FullName);
                 return;
