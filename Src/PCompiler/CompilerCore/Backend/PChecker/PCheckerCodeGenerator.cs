@@ -301,7 +301,7 @@ namespace Plang.Compiler.Backend.CSharp
             WriteNameSpacePrologue(context, output);
 
             var declName = context.Names.GetNameForDecl(machine);
-            context.WriteLine(output, $"internal partial class {declName} : Monitor");
+            context.WriteLine(output, $"internal partial class {declName} : Monitor, IMonitorFieldProvider");
             context.WriteLine(output, "{");
 
             foreach (var field in machine.Fields)
@@ -310,6 +310,7 @@ namespace Plang.Compiler.Backend.CSharp
                     $"private {GetCSharpType(field.Type)} {context.Names.GetNameForDecl(field)} = {GetDefaultValue(field.Type)};");
             }
 
+            WriteMonitorFieldProvider(context, output, machine);
             WriteMonitorConstructor(context, output, machine);
 
             foreach (var method in machine.Methods)
@@ -325,6 +326,28 @@ namespace Plang.Compiler.Backend.CSharp
             context.WriteLine(output, "}");
 
             WriteNameSpaceEpilogue(context, output);
+        }
+
+        private void WriteMonitorFieldProvider(CompilationContext context, StringWriter output, Machine machine)
+        {
+            context.WriteLine(output,
+                "public IReadOnlyDictionary<string, object> GetFieldValues()");
+            context.WriteLine(output, "{");
+            context.WriteLine(output,
+                "return new Dictionary<string, object>");
+            context.WriteLine(output, "{");
+
+            foreach (var field in machine.Fields)
+            {
+                var pName = field.Name;
+                var generatedName = context.Names.GetNameForDecl(field);
+                context.WriteLine(output,
+                    $"[\"{pName}\"] = {generatedName},"); 
+            }
+
+            context.WriteLine(output, "    };");
+            context.WriteLine(output, "}");
+            context.WriteLine(output);
         }
 
         private void WriteMonitorConstructor(CompilationContext context, StringWriter output, Machine machine)

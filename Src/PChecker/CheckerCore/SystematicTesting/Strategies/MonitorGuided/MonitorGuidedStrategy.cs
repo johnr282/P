@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using PChecker.IO.Debugging;
 using PChecker.Runtime.Specifications;
 using PChecker.SystematicTesting.Operations;
 using Plang.Compiler.TypeChecker.AST.Declarations;
@@ -11,11 +12,14 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 {
     internal class MonitorGuidedStrategy : ISchedulingStrategy
     {
-        private Dictionary<Machine, Monitor> monitors = new();
+        private readonly Dictionary<Machine, Monitor> monitors = new();
+
+        private readonly uint maxObservedEventsForMonitorExploration;
 
         public MonitorGuidedStrategy()
         {
-            Console.WriteLine("MonitorGuidedStrategy initialized.");
+            // JR TODO: Add this to CheckerConfiguration
+            maxObservedEventsForMonitorExploration = 100;
         }
 
         /// <summary>
@@ -33,6 +37,24 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             IEnumerable<SchedulingChoice> choices,
             out SchedulingChoice next)
         {
+            next = null;
+
+            foreach (var (monitorAST, monitor) in monitors)
+            {
+                if (monitor is not IMonitorFieldProvider fieldProvider)
+                {
+                    Error.CheckerReportAndExit(
+                        $"Monitor {monitorAST.Name} does not implement IMonitorFieldProvider " +
+                        $"required by MonitorGuided strategy.");
+                    return false;
+                }
+
+                var monitorFieldValues = fieldProvider.GetFieldValues();
+                var monitorState = monitor.CurrentStateName;
+
+                // JR TODO: Write monitor exploration procedure
+            }
+
             throw new NotImplementedException();
         }
 
@@ -57,7 +79,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// <inheritdoc/>
         public virtual bool PrepareForNextIteration()
         {
-            throw new NotImplementedException();
+            monitors.Clear();
+            return true;
         }
 
         /// <inheritdoc/>
