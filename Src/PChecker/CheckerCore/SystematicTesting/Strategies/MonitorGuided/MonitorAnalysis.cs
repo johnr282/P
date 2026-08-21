@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using PChecker.Runtime.Specifications;
 
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided
@@ -29,6 +30,30 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             }
 
             configuration.MonitorASTs = scope.Machines.Where(m => m.IsSpec).ToList();
+        }
+
+        /// <summary>
+        /// Returns the monitor AST from the given configuration with the given name.
+        /// </summary>
+        internal static Machine GetCorrespondingMonitorAST(
+            CheckerConfiguration configuration, 
+            string monitorASTName)
+        {
+            var matchingASTs = configuration.MonitorASTs
+                .Where(m => m.Name.Equals(monitorASTName)).ToList();
+
+            if (matchingASTs.Count == 0)
+            {
+                Error.ReportAndExit(
+                    $"No monitor AST found for monitor '{monitorASTName}'.");
+            }
+            else if (matchingASTs.Count > 1)
+            {
+                Error.ReportAndExit(
+                    $"Multiple monitor ASTs found for monitor '{monitorASTName}'.");
+            }
+
+            return matchingASTs[0];
         }
     }
 }

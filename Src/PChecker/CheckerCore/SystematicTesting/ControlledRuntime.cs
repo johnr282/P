@@ -25,6 +25,7 @@ using PChecker.Runtime.StateMachines.Exceptions;
 using PChecker.Runtime.StateMachines.Managers;
 using PChecker.SystematicTesting.Operations;
 using PChecker.SystematicTesting.Strategies;
+using PChecker.SystematicTesting.Strategies.MonitorGuided;
 //using PChecker.SystematicTesting.Strategies.Liveness;
 using PChecker.SystematicTesting.Traces;
 using Debug = PChecker.IO.Debugging.Debug;
@@ -771,9 +772,22 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// Registers a new specification monitor of the specified <see cref="Type"/>.
         /// </summary>
-        public void RegisterMonitor<T>()
-            where T : Monitor =>
-            TryCreateMonitor(typeof(T));
+        public void RegisterMonitor<T>(string monitorASTName)
+            where T : Monitor
+        {
+            var monitor = TryCreateMonitor(typeof(T));
+
+            if (monitor != null &&
+                CheckerConfiguration.SchedulingStrategy == StrategyType.MonitorGuided)
+            {
+                var strategy = Scheduler.Strategy as MonitorGuidedStrategy;
+                var monitorAST = MonitorAnalysis.GetCorrespondingMonitorAST(
+                    CheckerConfiguration, 
+                    monitorASTName);
+                strategy.RegisterMonitor(monitorAST, monitor);
+            }
+        }
+            
 
         /// <summary>
         /// Invokes the specified monitor with the specified <see cref="Event"/>.
@@ -789,12 +803,12 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// Tries to create a new <see cref="Runtime.Specifications.Monitor"/> of the specified <see cref="Type"/>.
         /// </summary>
-        internal void TryCreateMonitor(Type type)
+        internal Monitor TryCreateMonitor(Type type)
         {
             if (Monitors.Any(m => m.GetType() == type))
             {
                 // Idempotence: only one monitor per type can exist.
-                return;
+                return null;
             }
 
             Assert(type.IsSubclassOf(typeof(Monitor)), "Type '{0}' is not a subclass of Monitor.", type.FullName);
@@ -813,6 +827,7 @@ namespace PChecker.SystematicTesting
             Monitors.Add(monitor);
 
             monitor.GotoStartState();
+            return monitor;
         }
 
         /// <summary>

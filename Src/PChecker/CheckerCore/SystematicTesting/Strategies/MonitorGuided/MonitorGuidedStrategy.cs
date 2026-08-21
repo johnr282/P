@@ -3,17 +3,28 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using PChecker.Runtime.Specifications;
 using PChecker.SystematicTesting.Operations;
+using Plang.Compiler.TypeChecker.AST.Declarations;
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 {
     internal class MonitorGuidedStrategy : ISchedulingStrategy
     {
+        private Dictionary<Machine, Monitor> monitors = new();
 
         public MonitorGuidedStrategy()
         {
             Console.WriteLine("MonitorGuidedStrategy initialized.");
+        }
 
+        /// <summary>
+        /// Registers the given monitor AST with its corresponding runtime 
+        /// monitor instance.
+        /// </summary>
+        public void RegisterMonitor(Machine monitorAST, Monitor monitor)
+        {
+            monitors[monitorAST] = monitor;
         }
 
         /// <inheritdoc/>

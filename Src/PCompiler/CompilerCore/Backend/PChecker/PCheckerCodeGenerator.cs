@@ -488,7 +488,7 @@ namespace Plang.Compiler.Backend.CSharp
 
             foreach (var monitor in monitorMap.Keys)
             {
-                context.WriteLine(output, $"runtime.RegisterMonitor<{context.Names.GetNameForDecl(monitor)}>();");
+                context.WriteLine(output, $"runtime.RegisterMonitor<{context.Names.GetNameForDecl(monitor)}>(\"{monitor.Name}\");");
             }
 
             context.WriteLine(output, "}");

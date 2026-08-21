@@ -39,7 +39,7 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// The scheduling strategy used for program exploration.
         /// </summary>
-        private readonly ISchedulingStrategy Strategy;
+        internal readonly ISchedulingStrategy Strategy;
 
         /// <summary>
         /// Map from unique ids to asynchronous operations.
@@ -777,7 +777,8 @@ namespace PChecker.SystematicTesting
                 Runtime.LogWriter.LogAssertionFailure($"<ErrorLog> {text}");
                 var trace = new StackTrace();
                 Runtime.RaiseOnFailureEvent(new AssertionFailureException(text));
-                Runtime.LogWriter.LogStrategyDescription(CheckerConfiguration.SchedulingStrategy.ToString(),
+                Runtime.LogWriter.LogStrategyDescription(
+                    CheckerConfiguration.SchedulingStrategy.ToString().ToLowerInvariant(),
                     Strategy.GetDescription());
 
                 BugFound = true;
