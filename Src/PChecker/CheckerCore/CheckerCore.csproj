@@ -29,11 +29,13 @@
 		<Compile Remove="SystematicTesting\Strategies\Feedback\ScheduleAndInputStrategy.cs" />
 		<Compile Remove="SystematicTesting\Strategies\Liveness\LivenessCheckingStrategy.cs" />
 		<Compile Remove="SystematicTesting\Strategies\Liveness\TemperatureCheckingStrategy.cs" />
-		<Compile Remove="SystematicTesting\Strategies\MonitorGuided\MonitorGuidedStrategy.cs" />
 		<Compile Remove="SystematicTesting\Strategies\Special\ComboStrategy.cs" />
 		<Compile Remove="SystematicTesting\Strategies\Special\ReplayStrategy.cs" />
 		<Compile Remove="SystematicTesting\Strategies\Probabilistic\PCTStrategy.cs" />
 		<Compile Remove="SystematicTesting\Strategies\Probabilistic\ProbabilisticRandomStrategy.cs" />
 		<Compile Remove="SystematicTesting\Strategies\Probabilistic\QLearningStrategy.cs" />
+	</ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\PCompiler\CompilerCore\CompilerCore.csproj" />
 	</ItemGroup>
 </Project>

@@ -13,22 +13,32 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         public MonitorGuidedStrategy()
         {
             Console.WriteLine("MonitorGuidedStrategy initialized.");
+
         }
 
         /// <inheritdoc/>
-        public virtual bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next)
+        public virtual bool GetNextSchedulingChoice(
+            SchedulingChoice lastChoice,
+            IEnumerable<SchedulingChoice> choices,
+            out SchedulingChoice next)
         {
             throw new NotImplementedException();
         }
 
         /// <inheritdoc/>
-        public virtual bool GetNextBooleanChoice(AsyncOperation current, int maxValue, out bool next)
+        public virtual bool GetNextBooleanChoice(
+            SchedulingChoice lastChoice, 
+            int maxValue, 
+            out bool next)
         {
             throw new NotImplementedException();
         }
 
         /// <inheritdoc/>
-        public virtual bool GetNextIntegerChoice(AsyncOperation current, int maxValue, out int next)
+        public virtual bool GetNextIntegerChoice(
+            SchedulingChoice lastChoice, 
+            int maxValue, 
+            out int next)
         {
             throw new NotImplementedException();
         }

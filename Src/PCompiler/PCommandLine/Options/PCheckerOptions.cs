@@ -147,12 +147,16 @@ namespace Plang.Options
                 ProjectFileLocator.FindLocalPProject(result);
 
                 // load pproj file first
-                UpdateConfigurationWithPProjectFile(configuration, result);
+                var projectFilePath = UpdateConfigurationWithPProjectFile(
+                    configuration, 
+                    result);
 
                 foreach (var arg in result)
                 {
                     UpdateConfigurationWithParsedArgument(configuration, arg);
                 }
+
+                CreateCompilerConfigIfNecessary(configuration, projectFilePath);
 
                 // if P compiled file is not set, then search for the compiled dll/jar file locally
                 FindLocalPCompiledFile(configuration);
@@ -185,19 +189,25 @@ namespace Plang.Options
         /// <summary>
         /// Updates the checker configuration with the specified P project file.
         /// </summary>
-        private static void UpdateConfigurationWithPProjectFile(CheckerConfiguration configuration, List<CommandLineArgument> result)
+        /// <returns>The project file path used.</returns>
+        private static string UpdateConfigurationWithPProjectFile(CheckerConfiguration configuration, List<CommandLineArgument> result)
         {
+            string projectFilePath = null;
             foreach (var option in result)
             {
                 switch (option.LongName)
                 {
                     case "pproj":
                     {
-                        new ParsePProjectFile().ParseProjectFileForChecker((string)option.Value, configuration);
+                        projectFilePath = (string)option.Value;
+                        new ParsePProjectFile().ParseProjectFileForChecker(projectFilePath, configuration);
+                        return projectFilePath;
                     }
-                        return;
+                        
                 }
             }
+
+            return projectFilePath;
         }
 
         /// <summary>
@@ -389,6 +399,24 @@ namespace Plang.Options
             checkerConfiguration.SetOutputDirectory();
         }
 
+        private static void CreateCompilerConfigIfNecessary(CheckerConfiguration configuration, string projectFile)
+        {
+            if (configuration.SchedulingStrategy == "monitorguided")
+            {
+                if (projectFile == null)
+                {
+                    Error.CheckerReportAndExit(
+                        "Monitor-guided strategy requires a .pproj file.");
+                    return;
+                }
+
+                // Construct compiler configuration for monitor-guided strategy.
+                new ParsePProjectFile().ParseProjectFileForCompiler(
+                    projectFile,
+                    out var compilerConfig);
+                configuration.CompilerConfig = compilerConfig;
+            }
+        }
 
         private static void FindLocalPCompiledFile(CheckerConfiguration checkerConfiguration)
         {

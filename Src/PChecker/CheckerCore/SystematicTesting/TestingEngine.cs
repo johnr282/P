@@ -30,7 +30,7 @@ using PChecker.SystematicTesting.Strategies;
 using PChecker.SystematicTesting.Strategies.Feedback;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
 //using PChecker.SystematicTesting.Strategies.Special;
-//using PChecker.SystematicTesting.Strategies.MonitorGuided;
+using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using PChecker.SystematicTesting.Traces;
 using PChecker.Utilities;
 using Debug = PChecker.IO.Debugging.Debug;
@@ -266,6 +266,10 @@ namespace PChecker.SystematicTesting
             {
                 Strategy = new RandomStrategy(checkerConfiguration.MaxFairSchedulingSteps, RandomValueGenerator);
             }
+            else if (checkerConfiguration.SchedulingStrategy is "monitorguided")
+            {
+                Strategy = new MonitorGuidedStrategy();
+            }
             else
             {
                 Error.ReportAndExit(checkerConfiguration.SchedulingStrategy + 
@@ -316,10 +320,6 @@ namespace PChecker.SystematicTesting
             //{
             //    Strategy = new FeedbackGuidedStrategy(checkerConfiguration, new ControlledRandom(checkerConfiguration),
             //        new POSScheduler(new ControlledRandom(checkerConfiguration)));
-            //}
-            //else if (checkerConfiguration.SchedulingStrategy is "monitorguided")
-            //{
-            //    Strategy = new MonitorGuidedStrategy();
             //}
             //else if (checkerConfiguration.SchedulingStrategy is "portfolio")
             //{

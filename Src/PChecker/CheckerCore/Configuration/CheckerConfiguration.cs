@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Runtime.Serialization;
 using PChecker.Utilities;
+using Plang.Compiler;
+using Plang.Compiler.TypeChecker.AST.Declarations;
 
 namespace PChecker.Configuration
 {
@@ -209,6 +211,21 @@ namespace PChecker.Configuration
         /// Enables activity coverage debugging.
         /// </summary>
         public bool DebugActivityCoverage;
+
+        /// <summary>
+        /// Compiler configuration parsed from PProj file. Only used by 
+        /// monitor-guided strategy. 
+        /// </summary>
+        [IgnoreDataMember]
+        [field: NonSerialized]
+        public CompilerConfiguration CompilerConfig { get; set; }
+
+        /// <summary>
+        /// Parsed and type-checked monitors used by monitor-guided strategy.
+        /// </summary>
+        [IgnoreDataMember]
+        [field: NonSerialized]
+        public IEnumerable<Machine> MonitorASTs { get; set; }
 
         /// <summary>
         /// Is DGML graph showing all test schedules or just one "bug" schedule.

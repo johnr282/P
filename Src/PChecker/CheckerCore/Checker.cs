@@ -5,6 +5,7 @@ using PChecker.IO.Debugging;
 using PChecker.IO.Logging;
 using PChecker.SystematicTesting;
 using PChecker.Testing;
+using PChecker.SystematicTesting.Strategies.MonitorGuided;
 
 namespace PChecker;
 
@@ -58,6 +59,12 @@ public static class Checker
                     {
                         break;
                     }
+
+                    if (configuration.SchedulingStrategy == "monitorguided")
+                    {
+                        MonitorAnalysis.CompileMonitors(configuration);
+                    }
+
                     foreach (string tc in testCases)
                     {
                         configuration.TestCaseName = tc;

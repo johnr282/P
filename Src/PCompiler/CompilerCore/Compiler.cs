@@ -15,65 +15,8 @@ namespace Plang.Compiler
     {
         public int Compile(ICompilerConfiguration job)
         {
-            job.Output.WriteInfo("Parsing ...");
-
-            // Run parser on every input file
-            PParser.ProgramContext[] trees = null;
-            try
+            if (!ParseAndTypeCheck(job, out var scope))
             {
-                trees = job.InputPFiles.Select(file =>
-                {
-                    var tree = Parse(job, new FileInfo(file));
-                    job.LocationResolver.RegisterRoot(tree, new FileInfo(file));
-                    return tree;
-                }).ToArray();
-            }
-            catch (TranslationException e)
-            {
-                job.Output.WriteError("[Parser Error:] " + e.Message);
-                Environment.ExitCode = 1;
-                return Environment.ExitCode;
-            }
-            catch (NotSupportedException e)
-            {
-                job.Output.WriteError("[NotSupportedError:] " + e.Message);
-                Environment.ExitCode = 1;
-                return Environment.ExitCode;
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // A missing/locked/unreadable input .p file should be a clean error, not a crash.
-                job.Output.WriteError("[Parser Error:] " + e.Message);
-                Environment.ExitCode = 1;
-                return Environment.ExitCode;
-            }
-
-            job.Output.WriteInfo("Type checking ...");
-            // Run type checker and produce AST
-            Scope scope = null;
-            try
-            {
-                scope = Analyzer.AnalyzeCompilationUnit(job, trees);
-            }
-            catch (TranslationException e)
-            {
-                // Strict mode (ContinueOnError == false) or an exception that
-                // wasn't routed through IDiagnosticCollector. Flush any errors
-                // that *were* collected too, so we don't swallow them when both
-                // paths fire.
-                job.Output.WriteError("[Error:] " + e.Message);
-                FlushCollectedDiagnostics(job);
-                Environment.ExitCode = 1;
-                return Environment.ExitCode;
-            }
-
-            // Collecting mode: AnalyzeCompilationUnit returned, but the
-            // collector may hold errors that suppressed throws. Phase 1 has no
-            // visitor that reports through the collector, so this branch is
-            // dormant in practice; it's wired so Phase 2 / 3 light it up.
-            if (job.Diagnostics != null && job.Diagnostics.HasErrors)
-            {
-                FlushCollectedDiagnostics(job);
                 Environment.ExitCode = 1;
                 return Environment.ExitCode;
             }
@@ -155,6 +98,73 @@ namespace Plang.Compiler
 
             Environment.ExitCode = 0;
             return Environment.ExitCode;
+        }
+
+        /// <summary>
+        /// Performs the parsing and type checking compilation steps. 
+        /// </summary>
+        /// <returns>True if the compilation steps succeeded, false otherwise.</returns>
+        public static bool ParseAndTypeCheck(ICompilerConfiguration job, out Scope scope)
+        {
+            scope = null;
+            job.Output.WriteInfo("Parsing ...");
+
+            // Run parser on every input file
+            PParser.ProgramContext[] trees = null;
+            try
+            {
+                trees = job.InputPFiles.Select(file =>
+                {
+                    var tree = Parse(job, new FileInfo(file));
+                    job.LocationResolver.RegisterRoot(tree, new FileInfo(file));
+                    return tree;
+                }).ToArray();
+            }
+            catch (TranslationException e)
+            {
+                job.Output.WriteError("[Parser Error:] " + e.Message);
+                return false;
+            }
+            catch (NotSupportedException e)
+            {
+                job.Output.WriteError("[NotSupportedError:] " + e.Message);
+                return false; 
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // A missing/locked/unreadable input .p file should be a clean error, not a crash.
+                job.Output.WriteError("[Parser Error:] " + e.Message);
+                return false;
+            }
+
+            job.Output.WriteInfo("Type checking ...");
+            // Run type checker and produce AST
+            try
+            {
+                scope = Analyzer.AnalyzeCompilationUnit(job, trees);
+            }
+            catch (TranslationException e)
+            {
+                // Strict mode (ContinueOnError == false) or an exception that
+                // wasn't routed through IDiagnosticCollector. Flush any errors
+                // that *were* collected too, so we don't swallow them when both
+                // paths fire.
+                job.Output.WriteError("[Error:] " + e.Message);
+                FlushCollectedDiagnostics(job);
+                return false;
+            }
+
+            // Collecting mode: AnalyzeCompilationUnit returned, but the
+            // collector may hold errors that suppressed throws. Phase 1 has no
+            // visitor that reports through the collector, so this branch is
+            // dormant in practice; it's wired so Phase 2 / 3 light it up.
+            if (job.Diagnostics != null && job.Diagnostics.HasErrors)
+            {
+                FlushCollectedDiagnostics(job);
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>
