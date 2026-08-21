@@ -777,7 +777,7 @@ namespace PChecker.SystematicTesting
                 Runtime.LogWriter.LogAssertionFailure($"<ErrorLog> {text}");
                 var trace = new StackTrace();
                 Runtime.RaiseOnFailureEvent(new AssertionFailureException(text));
-                Runtime.LogWriter.LogStrategyDescription(CheckerConfiguration.SchedulingStrategy,
+                Runtime.LogWriter.LogStrategyDescription(CheckerConfiguration.SchedulingStrategy.ToString(),
                     Strategy.GetDescription());
 
                 BugFound = true;

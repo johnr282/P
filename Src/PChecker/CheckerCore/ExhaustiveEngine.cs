@@ -67,7 +67,7 @@ namespace PChecker
                 arguments.Append($"--testcase {_checkerConfiguration.TestCaseName} ");
             }
 
-            if (_checkerConfiguration.SchedulingStrategy is "replay")
+            if (_checkerConfiguration.SchedulingStrategy is StrategyType.Replay)
             {
                 arguments.Append($"--replay {_checkerConfiguration.ScheduleFile} ");
             }
@@ -76,7 +76,25 @@ namespace PChecker
                 switch (_checkerConfiguration.Mode)
                 {
                     case CheckerMode.PEx:
-                        arguments.Append($"--strategy {_checkerConfiguration.SchedulingStrategy} ");
+                        string pexStrategy;
+                        switch (_checkerConfiguration.SchedulingStrategy)
+                        {
+                            case StrategyType.Random:
+                                pexStrategy = "random";
+                                break;
+                            case StrategyType.DFS:
+                                pexStrategy = "dfs";
+                                break;
+                            case StrategyType.AStar:
+                                pexStrategy = "astar";
+                                break;
+                            default:
+                                Error.ReportAndExit(
+                                    $"Unexpected PEx strategy: {_checkerConfiguration.SchedulingStrategy}.");
+                                return string.Empty; 
+                        }
+
+                        arguments.Append($"--strategy {pexStrategy} ");
                         break;
                     default:
                         Error.ReportAndExit($"Unexpected checker mode: {_checkerConfiguration.Mode}.");

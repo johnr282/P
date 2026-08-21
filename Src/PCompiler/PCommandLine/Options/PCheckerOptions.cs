@@ -1,13 +1,14 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+using LanguageExt;
+using PChecker.Configuration;
+using PChecker.IO.Debugging;
+using Plang.Parser;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using PChecker.Configuration;
-using PChecker.IO.Debugging;
-using Plang.Parser;
 
 namespace Plang.Options
 {
@@ -58,6 +59,22 @@ namespace Plang.Options
                     throw new Exception($"Invalid inbox type '{type}'.");
             }
         }
+
+        internal static readonly string[] StrategyOptions = 
+            { 
+                "sch-random", 
+                "sch-pos",
+                "sch-feedbackpos",
+                "sch-feedback",
+                "sch-monitorguided",
+                "sch-probabilistic",
+                "sch-pct",
+                "sch-fairpct",
+                "sch-feedbackpct",
+                "sch-rl",
+                "sch-pex",
+                "replay"
+            };
 
         /// <summary>
         /// The command line parser to use.
@@ -215,6 +232,12 @@ namespace Plang.Options
         /// </summary>
         private static void UpdateConfigurationWithParsedArgument(CheckerConfiguration checkerConfiguration, CommandLineArgument option)
         {
+            if (StrategyOptions.Contains(option.LongName))
+            {
+                ParseStrategyArgument(checkerConfiguration, option);
+                return;
+            }
+
             switch (option.LongName)
             {
                 case "outdir":
@@ -251,44 +274,6 @@ namespace Plang.Options
                     break;
                 case "seed":
                     checkerConfiguration.RandomGeneratorSeed = (uint)option.Value;
-                    break;
-                case "sch-random":
-                case "sch-pos":
-                case "sch-feedbackpos":
-                case "sch-feedback":
-                case "sch-monitorguided":
-                    checkerConfiguration.SchedulingStrategy = option.LongName.Substring(4);
-                    break;
-                case "sch-probabilistic":
-                case "sch-pct":
-                case "sch-fairpct":
-                case "sch-feedbackpct":
-                    checkerConfiguration.SchedulingStrategy = option.LongName.Substring(4);
-                    checkerConfiguration.StrategyBound = (int)(uint)option.Value;
-                    break;
-                case "sch-rl":
-                    checkerConfiguration.SchedulingStrategy = option.LongName.Substring(4);
-                    checkerConfiguration.IsProgramStateHashingEnabled = true;
-                    break;
-                case "sch-pex":
-                    checkerConfiguration.SchedulingStrategy = (string)option.Value;
-                    break;
-                case "replay":
-                {
-                    var filename = (string)option.Value;
-                    var extension = Path.GetExtension(filename);
-                    if (!extension.Equals(".schedule"))
-                    {
-                        Error.CheckerReportAndExit("Please give a valid schedule file " +
-                                                   "'--replay x', where 'x' has extension '.schedule'.");
-                    }
-
-                    checkerConfiguration.ScheduleFile = filename;
-                    checkerConfiguration.SchedulingStrategy = "replay";
-                    checkerConfiguration.EnableColoredConsoleOutput = true;
-                    checkerConfiguration.DisableEnvironmentExit = false;
-                }
-
                     break;
                 case "iterations":
                 case "schedules":
@@ -354,6 +339,95 @@ namespace Plang.Options
             }
         }
 
+        /// <summary>
+        /// Parses the given strategy argument and updates the checkerConfiguration 
+        /// as necessary.
+        /// </summary>
+        private static void ParseStrategyArgument(
+            CheckerConfiguration configuration,
+            CommandLineArgument option)
+        {
+            StrategyType strategyType;
+
+            var strategyOption = option.LongName.ToLowerInvariant();
+            switch (strategyOption)
+            {
+                case "sch-random":
+                    strategyType = StrategyType.Random;
+                    break;
+                case "sch-pos":
+                    strategyType = StrategyType.POS;
+                    break;
+                case "sch-feedbackpos":
+                    strategyType = StrategyType.FeedbackPOS;
+                    break;
+                case "sch-feedback":
+                    strategyType = StrategyType.Feedback;
+                    break;
+                case "sch-monitorguided":
+                    strategyType = StrategyType.MonitorGuided;
+                    break;
+                case "sch-probabilistic":
+                    strategyType = StrategyType.Probabilistic;
+                    break;
+                case "sch-pct":
+                    strategyType = StrategyType.PCT;
+                    break;
+                case "sch-fairpct":
+                    strategyType = StrategyType.FairPCT;
+                    break;
+                case "sch-feedbackpct":
+                    strategyType = StrategyType.FeedbackPCT;
+                    break;
+                case "sch-rl":
+                    strategyType = StrategyType.RL;
+                    break;
+                case "sch-pex":
+                    var pexStrategy = ((string)option.Value).ToLowerInvariant();
+                    strategyType = pexStrategy switch
+                    {
+                        "random" => StrategyType.Random,
+                        "dfs" => StrategyType.DFS,
+                        "astar" => StrategyType.AStar,
+                        _ => throw new Exception($"Invalid PEx strategy type '{pexStrategy}'."),
+                    };
+                    break;
+                case "replay":
+                    strategyType = StrategyType.Replay;
+                    break;
+                default:
+                    throw new Exception($"Invalid strategy type '{strategyOption}'.");
+            }
+
+            configuration.SchedulingStrategy = strategyType;
+
+            switch (strategyType)
+            {
+                case StrategyType.Probabilistic:
+                case StrategyType.PCT:
+                case StrategyType.FairPCT:
+                case StrategyType.FeedbackPCT:
+                    configuration.StrategyBound = (int)(uint)option.Value;
+                    break;
+                case StrategyType.RL:
+                    configuration.IsProgramStateHashingEnabled = true;
+                    break;
+                case StrategyType.Replay:
+                    var filename = (string)option.Value;
+                    var extension = Path.GetExtension(filename);
+                    if (!extension.Equals(".schedule"))
+                    {
+                        Error.CheckerReportAndExit("Please give a valid schedule file " +
+                                                   "'--replay x', where 'x' has extension '.schedule'.");
+                    }
+
+                    configuration.ScheduleFile = filename;
+                    configuration.EnableColoredConsoleOutput = true;
+                    configuration.DisableEnvironmentExit = false;
+                    break;
+            }
+        }
+
         private static void WriteVersion()
         {
             Console.WriteLine("Version: {0}", typeof(PCheckerOptions).Assembly.GetName().Version);
@@ -370,26 +444,6 @@ namespace Plang.Options
                 checkerConfiguration.LivenessTemperatureThreshold = checkerConfiguration.MaxFairSchedulingSteps / 2;
             }
 
-            if (checkerConfiguration.SchedulingStrategy != "portfolio" &&
-                checkerConfiguration.SchedulingStrategy != "random" &&
-                checkerConfiguration.SchedulingStrategy != "feedback" &&
-                checkerConfiguration.SchedulingStrategy != "feedbackpct" &&
-                checkerConfiguration.SchedulingStrategy != "feedbackpos" &&
-                checkerConfiguration.SchedulingStrategy != "pct" &&
-                checkerConfiguration.SchedulingStrategy != "pos" &&
-                checkerConfiguration.SchedulingStrategy != "fairpct" &&
-                checkerConfiguration.SchedulingStrategy != "probabilistic" &&
-                checkerConfiguration.SchedulingStrategy != "rl" &&
-                checkerConfiguration.SchedulingStrategy != "replay" &&
-                checkerConfiguration.SchedulingStrategy != "learn" &&
-                checkerConfiguration.SchedulingStrategy != "dfs" &&
-                checkerConfiguration.SchedulingStrategy != "stateless" &&
-                checkerConfiguration.SchedulingStrategy != "astar" &&
-                checkerConfiguration.SchedulingStrategy != "monitorguided")
-            {
-                Error.CheckerReportAndExit("Please provide a scheduling strategy (see --sch* options)");
-            }
-
             if (checkerConfiguration.MaxFairSchedulingSteps < checkerConfiguration.MaxUnfairSchedulingSteps)
             {
                 Error.CheckerReportAndExit("For the option '--max-steps N[,M]', please make sure that M >= N.");
@@ -401,7 +455,7 @@ namespace Plang.Options
 
         private static void CreateCompilerConfigIfNecessary(CheckerConfiguration configuration, string projectFile)
         {
-            if (configuration.SchedulingStrategy == "monitorguided")
+            if (configuration.SchedulingStrategy is StrategyType.MonitorGuided)
             {
                 if (projectFile == null)
                 {

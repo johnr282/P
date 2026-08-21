@@ -84,7 +84,7 @@ namespace PChecker.Configuration
         /// The systematic testing strategy to use.
         /// </summary>
         [DataMember]
-        public string SchedulingStrategy { get;  set; }
+        public StrategyType SchedulingStrategy { get;  set; }
 
         /// <summary>
         /// Number of testing schedules.
@@ -326,7 +326,7 @@ namespace PChecker.Configuration
             ListTestCases = false;
 
             InboxType = InboxType.EventQueue;
-            SchedulingStrategy = "random";
+            SchedulingStrategy = StrategyType.Random;
             TestingIterations = 1;
             RandomGeneratorSeed = null;
             IncrementalSchedulingSeed = false;
@@ -382,7 +382,7 @@ namespace PChecker.Configuration
         /// </summary>
         public CheckerConfiguration WithRandomStrategy()
         {
-            SchedulingStrategy = "random";
+            SchedulingStrategy = StrategyType.Random;
             return this;
         }
 
@@ -395,7 +395,7 @@ namespace PChecker.Configuration
         /// <param name="probabilityLevel">The probability level.</param>
         public CheckerConfiguration WithProbabilisticStrategy(uint probabilityLevel = 3)
         {
-            SchedulingStrategy = "fairpct";
+            SchedulingStrategy = StrategyType.Probabilistic;
             StrategyBound = (int)probabilityLevel;
             return this;
         }
@@ -408,7 +408,7 @@ namespace PChecker.Configuration
         /// <param name="numPrioritySwitchPoints">The nunmber of priority switch points.</param>
         public CheckerConfiguration WithPCTStrategy(bool isFair, uint numPrioritySwitchPoints = 10)
         {
-            SchedulingStrategy = isFair ? "fairpct" : "pct";
+            SchedulingStrategy = isFair ? StrategyType.FairPCT : StrategyType.PCT;
             StrategyBound = (int)numPrioritySwitchPoints;
             return this;
         }
@@ -419,7 +419,7 @@ namespace PChecker.Configuration
         /// </summary>
         public CheckerConfiguration WithRLStrategy()
         {
-            SchedulingStrategy = "rl";
+            SchedulingStrategy = StrategyType.RL;
             IsProgramStateHashingEnabled = true;
             return this;
         }
@@ -429,7 +429,7 @@ namespace PChecker.Configuration
         /// </summary>
         public CheckerConfiguration WithDFSStrategy()
         {
-            SchedulingStrategy = "dfs";
+            SchedulingStrategy = StrategyType.DFS;
             return this;
         }
 
@@ -440,7 +440,7 @@ namespace PChecker.Configuration
         /// <param name="scheduleTrace">The schedule trace to be replayed.</param>
         public CheckerConfiguration WithReplayStrategy(string scheduleTrace)
         {
-            SchedulingStrategy = "replay";
+            SchedulingStrategy = StrategyType.Replay;
             ScheduleTrace = scheduleTrace;
             return this;
         }
@@ -570,7 +570,7 @@ namespace PChecker.Configuration
                 Directory.Delete(older, true);
             }
 
-            if(SchedulingStrategy != "replay"){
+            if(SchedulingStrategy != StrategyType.Replay){
                 for (var history = MaxHistory - 2; history >= 0; --history)
                 {
                     var newer = makeHistoryDirName(history);

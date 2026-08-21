@@ -23,7 +23,7 @@ public static class Checker
     {
         var logger = new ConsoleLogger();
         // if the replay option is passed then we ignore all the other options and replay the schedule
-        if (configuration.SchedulingStrategy == "replay")
+        if (configuration.SchedulingStrategy == StrategyType.Replay)
         {
             logger.WriteLine(
                 $"Replay option is used, checker is ignoring all other parameters and using the {configuration.ScheduleFile} to replay the schedule");
@@ -60,7 +60,7 @@ public static class Checker
                         break;
                     }
 
-                    if (configuration.SchedulingStrategy == "monitorguided")
+                    if (configuration.SchedulingStrategy is StrategyType.MonitorGuided)
                     {
                         MonitorAnalysis.CompileMonitors(configuration);
                     }

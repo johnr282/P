@@ -256,25 +256,29 @@ namespace PChecker.SystematicTesting
             {
                 JsonVerboseLogs = new List<List<LogEntry>>();
             }
+
+            switch (checkerConfiguration.SchedulingStrategy)
+            {
+                case StrategyType.Random:
+                    Strategy = new RandomStrategy(
+                        checkerConfiguration.MaxFairSchedulingSteps, 
+                        RandomValueGenerator);
+                    break;
+                case StrategyType.MonitorGuided:
+                    Strategy = new MonitorGuidedStrategy();
+                    break;
+                default:
+                    Error.ReportAndExit(checkerConfiguration.SchedulingStrategy +
+                        " is not available.");
+                    break;
+            }
+
             //if (checkerConfiguration.SchedulingStrategy is "replay")
             //{
             //    var scheduleDump = GetScheduleForReplay(out var isFair);
             //    var schedule = new ScheduleTrace(scheduleDump);
             //    Strategy = new ReplayStrategy(checkerConfiguration, schedule, isFair);
             //}
-            if (checkerConfiguration.SchedulingStrategy is "random")
-            {
-                Strategy = new RandomStrategy(checkerConfiguration.MaxFairSchedulingSteps, RandomValueGenerator);
-            }
-            else if (checkerConfiguration.SchedulingStrategy is "monitorguided")
-            {
-                Strategy = new MonitorGuidedStrategy();
-            }
-            else
-            {
-                Error.ReportAndExit(checkerConfiguration.SchedulingStrategy + 
-                    " is not available.");
-            }
             //else if (checkerConfiguration.SchedulingStrategy is "pct")
             //{
             //    Strategy = new PCTStrategy(checkerConfiguration.MaxUnfairSchedulingSteps, checkerConfiguration.StrategyBound,
@@ -406,15 +410,15 @@ namespace PChecker.SystematicTesting
         private System.Threading.Tasks.Task CreateTestingTask()
         {
             var options = string.Empty;
-            if (_checkerConfiguration.SchedulingStrategy is "random" ||
-                _checkerConfiguration.SchedulingStrategy is "pct" ||
-                _checkerConfiguration.SchedulingStrategy is "pos" ||
-                _checkerConfiguration.SchedulingStrategy is "feedbackpct" ||
-                _checkerConfiguration.SchedulingStrategy is "feedbackpctcp" ||
-                _checkerConfiguration.SchedulingStrategy is "feedbackpos" ||
-                _checkerConfiguration.SchedulingStrategy is "fairpct" ||
-                _checkerConfiguration.SchedulingStrategy is "probabilistic" ||
-                _checkerConfiguration.SchedulingStrategy is "rl")
+            if (_checkerConfiguration.SchedulingStrategy is StrategyType.Random or
+                StrategyType.PCT or
+                StrategyType.POS or
+                StrategyType.FeedbackPCT or
+                StrategyType.FeedbackPCTCP or
+                StrategyType.FeedbackPOS or
+                StrategyType.FairPCT or
+                StrategyType.Probabilistic or
+                StrategyType.RL)
             {
                 options = $" (seed:{RandomValueGenerator.Seed})";
             }
