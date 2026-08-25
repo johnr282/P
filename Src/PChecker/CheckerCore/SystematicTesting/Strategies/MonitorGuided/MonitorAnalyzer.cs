@@ -9,8 +9,10 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using PChecker.Runtime.Specifications;
+using Plang.Compiler.Backend.PEx;
 using Plang.Compiler.TypeChecker.AST.States;
 using Plang.Compiler.TypeChecker.AST;
+using Plang.Compiler.TypeChecker.AST.Statements;
 
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided
@@ -68,7 +70,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         internal bool FindViolatingExecution(
             State currentState,
             Dictionary<string, object> concreteGlobals, 
-            out List<SymbolicEvent> violatingExecution)
+            out List<SymEvent> violatingExecution)
         {
             // Construct initial exploration and place in frontier
 
@@ -93,7 +95,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// </summary>
         private void ComputeSuccessorNodes(ExplorationNode node)
         {
-            SymbolicState state = node.SymbolicState;
+            SymState state = node.SymbolicState;
             if (!state.IsHandlingEvent)
             {
                 if (state.ObservedEvents >= maxObservedEvents)
@@ -104,68 +106,69 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 var availableHandlers = state.CurrentState.AllEventHandlers;
                 foreach (var handler in availableHandlers)
                 {
-                    var nextState = state;
+                    var nextState = SymState.Clone(state);
 
                     // Create new stack frame for the handler, adding a symbolic
                     // payload local variable for the event parameter, and add
                     // it to nextState.CallStack
+                    nextState.ObservedEvents++;
 
                     // TransitionEvent is symbolic event used for event parameter
-                    SymbolicEvent transitionEvent = null;
+                    SymEvent transitionEvent = null;
                     var nextNode = new ExplorationNode(
                         nextState,
                         node,
                         transitionEvent);
                     frontier.Add(nextNode);
                 }
+
+                return;
             }
-            else
+            
+            // Execute current event handler until a state has multiple feasible
+            // successors, which occurs when either a branch statement is reached,
+            // or the handler completes and a new observed event is needed to
+            // continue execution. 
+            while (true)
             {
-                // Execute current event handler until a state has multiple feasible
-                // successors, which occurs when either a branch statement is reached,
-                // or the handler completes and a new observed event is needed to
-                // continue execution. 
-                while (true)
+                var result = ExecuteNextStatement(state, out var successors);
+
+                switch (result)
                 {
-                    var result = ExecuteNextStatement(state, out var successors);
-                    if (result == ExecutionResult.Violation)
-                    {
+                    case ExecutionResult.Terminated:
+                        return;
+                    case ExecutionResult.Violation:
                         violatingNode = new ExplorationNode(
                             state,
                             node,
                             null);
                         return;
-                    }
-
-                    if (result == ExecutionResult.Terminated)
-                    {
-                        return;
-                    }
-
-                    if (successors.Count() > 1)
-                    {
-                        foreach (var successor in successors)
+                    case ExecutionResult.HasSuccessors:
+                        if (successors.Count > 1)
                         {
+                            foreach (var successor in successors)
+                            {
+                                var nextNode = new ExplorationNode(
+                                    successor,
+                                    node,
+                                    null);
+                                frontier.Add(nextNode);
+                            }
+                            return;
+                        }
+
+                        state = successors[0];
+                        if (!state.IsHandlingEvent)
+                        {
+                            // Current event handler has completed
                             var nextNode = new ExplorationNode(
-                                successor,
+                                state,
                                 node,
                                 null);
                             frontier.Add(nextNode);
+                            return;
                         }
-                        return;
-                    }
-
-                    state = successors.First();
-                    if (!state.IsHandlingEvent)
-                    {
-                        // Current event handler has completed
-                        var nextNode = new ExplorationNode(
-                            state,
-                            node,
-                            null);
-                        frontier.Add(nextNode);
-                        return;
-                    }
+                        break;
                 }
             }
         }
@@ -182,18 +185,68 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// Result of execution. 
         /// </returns>
         private ExecutionResult ExecuteNextStatement(
-            SymbolicState state,
-            out IEnumerable<SymbolicState> successors)
+            SymState state,
+            out IReadOnlyList<SymState> successors)
         {
-            throw new NotImplementedException();
+            var frame = state.CallStack.Peek();
+            var nextStatement = GetNextStatement(frame);
+
+            switch (nextStatement)
+            {
+                case AddStmt stmt:      return StatementExecutor.ExecuteAddStmt(state, stmt, out successors);
+                case AssertStmt stmt:   return StatementExecutor.ExecuteAssertStmt(state, stmt, out successors);
+                case AssignStmt stmt:   return StatementExecutor.ExecuteAssignStmt(state, stmt, out successors);
+                case BreakStmt stmt:    return StatementExecutor.ExecuteBreakStmt(state, stmt, out successors);
+                case CompoundStmt stmt: return StatementExecutor.ExecuteCompoundStmt(state, stmt, out successors);
+                case ContinueStmt stmt: return StatementExecutor.ExecuteContinueStmt(state, stmt, out successors);
+                case ForeachStmt stmt:  return StatementExecutor.ExecuteForeachStmt(state, stmt, out successors);
+                case FunCallStmt stmt:  return StatementExecutor.ExecuteFunCallStmt(state, stmt, out successors);
+                case GotoStmt stmt:     return StatementExecutor.ExecuteGotoStmt(state, stmt, out successors);
+                case IfStmt stmt:       return StatementExecutor.ExecuteIfStmt(state, stmt, out successors);
+                case InsertStmt stmt:   return StatementExecutor.ExecuteInsertStmt(state, stmt, out successors);
+                case NoStmt stmt:       return StatementExecutor.ExecuteNoStmt(state, stmt, out successors);
+                case PrintStmt stmt:    return StatementExecutor.ExecutePrintStmt(state, stmt, out successors);
+                case RaiseStmt stmt:    return StatementExecutor.ExecuteRaiseStmt(state, stmt, out successors);
+                case RemoveStmt stmt:   return StatementExecutor.ExecuteRemoveStmt(state, stmt, out successors);
+                case ReturnStmt stmt:   return StatementExecutor.ExecuteReturnStmt(state, stmt, out successors);
+                case WhileStmt stmt:    return StatementExecutor.ExecuteWhileStmt(state, stmt, out successors);
+
+                case AnnounceStmt:
+                case AssumeStmt:
+                case CtorStmt:
+                case MoveAssignStmt:
+                case ReceiveStmt:
+                case SendStmt:
+                case SwapAssignStmt:
+                case ReceiveSplitStmt: 
+                    throw new PInternalException(
+                        $"Unsupported monitor statement type: '{nextStatement.GetType().Name}'.");
+                default:
+                    throw new PInternalException(
+                        $"Unrecognized statement type: '{nextStatement?.GetType().FullName}'.");
+            }
+        }
+
+        private IPStmt GetNextStatement(StackFrame frame)
+        {
+            var function = monitorAST.Methods.FirstOrDefault(
+                m => m.Name.Equals(frame.FunctionName));
+
+            if (function == null)
+            {
+                throw new PInternalException(
+                    $"Function '{frame.FunctionName}' not found in monitor AST.");
+            }
+
+            return function.Body.Statements[frame.ProgramCounter];
         }
 
         /// <summary>
         /// Computes sequence of events leading to the given node.
         /// </summary>
-        private List<SymbolicEvent> ComputeCausalExecution(ExplorationNode node)
+        private List<SymEvent> ComputeCausalExecution(ExplorationNode node)
         {
-            List<SymbolicEvent> execution = new();
+            List<SymEvent> execution = new();
 
             while (node != null)
             {
@@ -214,78 +267,28 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             DFS
         }
 
-        private enum ExecutionResult
+        internal enum ExecutionResult
         {
-            Successors,
+            HasSuccessors,
             Terminated,
             Violation
         }
 
-        private class ExplorationNode
+        private sealed class ExplorationNode
         {
-            public SymbolicState SymbolicState { get; }
+            public SymState SymbolicState { get; }
             public ExplorationNode Parent { get; }
-            public SymbolicEvent TransitionEvent { get; }
+            public SymEvent TransitionEvent { get; }
 
             public ExplorationNode(
-                SymbolicState symbolicState,
+                SymState symbolicState,
                 ExplorationNode parent,
-                SymbolicEvent transitionEvent)
+                SymEvent transitionEvent)
             {
                 SymbolicState = symbolicState;
                 Parent = parent;
                 TransitionEvent = transitionEvent;
             }
-        }
-
-        internal class SymbolicEvent
-        {
-        }
-
-        private class SymbolicState
-        {
-            public State CurrentState { get; }
-            public Stack<StackFrame> CallStack { get; }
-            public Dictionary<string, SymbolicValue> Globals { get; }
-            public PathCondition PathCondition { get; }
-            public uint ObservedEvents { get; set; }
-
-            public SymbolicState(
-                State currentState,
-                Stack<StackFrame> callStack,
-                Dictionary<string, SymbolicValue> globals,
-                PathCondition pathCondition,
-                uint observedEvents)
-            {
-                CurrentState = currentState;
-                CallStack = callStack;
-                Globals = globals;
-                PathCondition = pathCondition;
-                ObservedEvents = observedEvents;
-            }
-
-            /// <summary>
-            /// Whether a monitor in this state is handling an event.
-            /// </summary>
-            public bool IsHandlingEvent => CallStack.TryPeek(out var _);
-        }
-
-        private class StackFrame
-        {
-            public Dictionary<string, SymbolicValue> Locals { get; }
-            public ProgramCounter ProgramCounter { get; }
-        }
-
-        private class ProgramCounter
-        { 
-        }
-
-        private class SymbolicValue
-        {
-        }
-
-        private class PathCondition
-        {
         }
 
         /// <summary>
