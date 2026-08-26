@@ -781,7 +781,7 @@ namespace PChecker.SystematicTesting
                 CheckerConfiguration.SchedulingStrategy == StrategyType.MonitorGuided)
             {
                 var strategy = Scheduler.Strategy as MonitorGuidedStrategy;
-                var monitorAST = MonitorAnalyzer.GetCorrespondingMonitorAST(
+                var monitorAST = MonitorInitializer.GetCorrespondingMonitorAST(
                     CheckerConfiguration, 
                     monitorASTName);
                 strategy.RegisterMonitor(monitorAST, monitor);

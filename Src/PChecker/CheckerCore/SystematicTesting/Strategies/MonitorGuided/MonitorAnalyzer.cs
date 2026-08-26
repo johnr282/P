@@ -13,19 +13,21 @@ using Plang.Compiler.Backend.PEx;
 using Plang.Compiler.TypeChecker.AST.States;
 using Plang.Compiler.TypeChecker.AST;
 using Plang.Compiler.TypeChecker.AST.Statements;
+using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution;
+using System.Diagnostics;
 
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 {
     internal class MonitorAnalyzer
     {
-        private readonly Machine monitorAST;
+        private readonly Machine _monitorAST;
         
-        private readonly IFrontier<ExplorationNode> frontier;
+        private readonly IFrontier<ExplorationNode> _frontier;
 
-        private readonly uint maxObservedEvents;
+        private readonly uint _maxObservedEvents;
 
-        private ExplorationNode violatingNode = null;
+        private ExplorationNode _violatingNode = null;
 
         /// <summary>
         /// Constructs a new instance of the <see cref="MonitorAnalyzer"/> class."/>
@@ -44,10 +46,10 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             uint maxEvents,
             SearchStrategy strategy)
         {
-            monitorAST = monitor;
-            maxObservedEvents = maxEvents;
+            _monitorAST = monitor;
+            _maxObservedEvents = maxEvents;
 
-            frontier = strategy switch
+            _frontier = strategy switch
             {
                 SearchStrategy.BFS => new QueueFrontier<ExplorationNode>(),
                 SearchStrategy.DFS => new StackFrontier<ExplorationNode>(),
@@ -74,19 +76,19 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         {
             // Construct initial exploration and place in frontier
 
-            while (frontier.TryRemoveNext(out var nextNode) &&
-                violatingNode == null)
+            while (_frontier.TryRemoveNext(out var nextNode) &&
+                _violatingNode == null)
             {
                 ComputeSuccessorNodes(nextNode);
             }
 
-            if (violatingNode == null)
+            if (_violatingNode == null)
             {
                 violatingExecution = null;
                 return false;
             }
 
-            violatingExecution = ComputeCausalExecution(violatingNode);
+            violatingExecution = ComputeCausalExecution(_violatingNode);
             return true;
         }
 
@@ -98,7 +100,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             SymState state = node.SymbolicState;
             if (!state.IsHandlingEvent)
             {
-                if (state.ObservedEvents >= maxObservedEvents)
+                if (state.ObservedEvents >= _maxObservedEvents)
                 {
                     return;
                 }
@@ -108,18 +110,18 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 {
                     var nextState = SymState.Clone(state);
 
-                    // Create new stack frame for the handler, adding a symbolic
+                    // JR TODO: Create new stack frame for the handler, adding a symbolic
                     // payload local variable for the event parameter, and add
                     // it to nextState.CallStack
                     nextState.ObservedEvents++;
 
-                    // TransitionEvent is symbolic event used for event parameter
+                    // JR TODO: TransitionEvent is symbolic event used for event parameter
                     SymEvent transitionEvent = null;
                     var nextNode = new ExplorationNode(
                         nextState,
                         node,
                         transitionEvent);
-                    frontier.Add(nextNode);
+                    _frontier.Add(nextNode);
                 }
 
                 return;
@@ -131,33 +133,22 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             // continue execution. 
             while (true)
             {
-                var result = ExecuteNextStatement(state, out var successors);
+                var result = Execution.Step(state);
 
                 switch (result)
                 {
-                    case ExecutionResult.Terminated:
+                    case Terminated:
                         return;
-                    case ExecutionResult.Violation:
-                        violatingNode = new ExplorationNode(
-                            state,
+
+                    case Violation violation:
+                        _violatingNode = new ExplorationNode(
+                            violation.State,
                             node,
                             null);
                         return;
-                    case ExecutionResult.HasSuccessors:
-                        if (successors.Count > 1)
-                        {
-                            foreach (var successor in successors)
-                            {
-                                var nextNode = new ExplorationNode(
-                                    successor,
-                                    node,
-                                    null);
-                                frontier.Add(nextNode);
-                            }
-                            return;
-                        }
 
-                        state = successors[0];
+                    case SingleSuccessor successor:
+                        state = successor.Successor;
                         if (!state.IsHandlingEvent)
                         {
                             // Current event handler has completed
@@ -165,80 +156,23 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                                 state,
                                 node,
                                 null);
-                            frontier.Add(nextNode);
+                            _frontier.Add(nextNode);
                             return;
                         }
                         break;
+
+                    case MultipleSuccessors successors:
+                        foreach (var successor in successors.Successors)
+                        {
+                            var nextNode = new ExplorationNode(
+                                successor,
+                                node,
+                                null);
+                            _frontier.Add(nextNode);
+                        }
+                        return;
                 }
             }
-        }
-
-        /// <summary>
-        /// Symbolically executes the next statement according to the given 
-        /// symbolic state. 
-        /// </summary>
-        /// <param name="state">State to begin execution from.</param>
-        /// <param name="successors">
-        /// Successor states resulting from execution.
-        /// </param>
-        /// <returns>
-        /// Result of execution. 
-        /// </returns>
-        private ExecutionResult ExecuteNextStatement(
-            SymState state,
-            out IReadOnlyList<SymState> successors)
-        {
-            var frame = state.CallStack.Peek();
-            var nextStatement = GetNextStatement(frame);
-
-            switch (nextStatement)
-            {
-                case AddStmt stmt:      return StatementExecutor.ExecuteAddStmt(state, stmt, out successors);
-                case AssertStmt stmt:   return StatementExecutor.ExecuteAssertStmt(state, stmt, out successors);
-                case AssignStmt stmt:   return StatementExecutor.ExecuteAssignStmt(state, stmt, out successors);
-                case BreakStmt stmt:    return StatementExecutor.ExecuteBreakStmt(state, stmt, out successors);
-                case CompoundStmt stmt: return StatementExecutor.ExecuteCompoundStmt(state, stmt, out successors);
-                case ContinueStmt stmt: return StatementExecutor.ExecuteContinueStmt(state, stmt, out successors);
-                case ForeachStmt stmt:  return StatementExecutor.ExecuteForeachStmt(state, stmt, out successors);
-                case FunCallStmt stmt:  return StatementExecutor.ExecuteFunCallStmt(state, stmt, out successors);
-                case GotoStmt stmt:     return StatementExecutor.ExecuteGotoStmt(state, stmt, out successors);
-                case IfStmt stmt:       return StatementExecutor.ExecuteIfStmt(state, stmt, out successors);
-                case InsertStmt stmt:   return StatementExecutor.ExecuteInsertStmt(state, stmt, out successors);
-                case NoStmt stmt:       return StatementExecutor.ExecuteNoStmt(state, stmt, out successors);
-                case PrintStmt stmt:    return StatementExecutor.ExecutePrintStmt(state, stmt, out successors);
-                case RaiseStmt stmt:    return StatementExecutor.ExecuteRaiseStmt(state, stmt, out successors);
-                case RemoveStmt stmt:   return StatementExecutor.ExecuteRemoveStmt(state, stmt, out successors);
-                case ReturnStmt stmt:   return StatementExecutor.ExecuteReturnStmt(state, stmt, out successors);
-                case WhileStmt stmt:    return StatementExecutor.ExecuteWhileStmt(state, stmt, out successors);
-
-                case AnnounceStmt:
-                case AssumeStmt:
-                case CtorStmt:
-                case MoveAssignStmt:
-                case ReceiveStmt:
-                case SendStmt:
-                case SwapAssignStmt:
-                case ReceiveSplitStmt: 
-                    throw new PInternalException(
-                        $"Unsupported monitor statement type: '{nextStatement.GetType().Name}'.");
-                default:
-                    throw new PInternalException(
-                        $"Unrecognized statement type: '{nextStatement?.GetType().FullName}'.");
-            }
-        }
-
-        private IPStmt GetNextStatement(StackFrame frame)
-        {
-            var function = monitorAST.Methods.FirstOrDefault(
-                m => m.Name.Equals(frame.FunctionName));
-
-            if (function == null)
-            {
-                throw new PInternalException(
-                    $"Function '{frame.FunctionName}' not found in monitor AST.");
-            }
-
-            return function.Body.Statements[frame.ProgramCounter];
         }
 
         /// <summary>
@@ -267,13 +201,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             DFS
         }
 
-        internal enum ExecutionResult
-        {
-            HasSuccessors,
-            Terminated,
-            Violation
-        }
-
         private sealed class ExplorationNode
         {
             public SymState SymbolicState { get; }
@@ -289,47 +216,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 Parent = parent;
                 TransitionEvent = transitionEvent;
             }
-        }
-
-        /// <summary>
-        /// Performs parsing and type checking of the P program to extract the 
-        /// monitor ASTs.
-        /// </summary>
-        internal static void CompileMonitors(CheckerConfiguration configuration)
-        {
-            if (!Compiler.ParseAndTypeCheck(configuration.CompilerConfig, out var scope))
-            {
-                Error.CheckerReportAndExit(
-                    "Parsing and type checking during monitor analysis for " +
-                    "monitor-guided strategy failed.");
-                return;
-            }
-
-            configuration.MonitorASTs = scope.Machines.Where(m => m.IsSpec).ToList();
-        }
-
-        /// <summary>
-        /// Returns the monitor AST from the given configuration with the given name.
-        /// </summary>
-        internal static Machine GetCorrespondingMonitorAST(
-            CheckerConfiguration configuration, 
-            string monitorASTName)
-        {
-            var matchingASTs = configuration.MonitorASTs
-                .Where(m => m.Name.Equals(monitorASTName)).ToList();
-
-            if (matchingASTs.Count == 0)
-            {
-                Error.ReportAndExit(
-                    $"No monitor AST found for monitor '{monitorASTName}'.");
-            }
-            else if (matchingASTs.Count > 1)
-            {
-                Error.ReportAndExit(
-                    $"Multiple monitor ASTs found for monitor '{monitorASTName}'.");
-            }
-
-            return matchingASTs[0];
         }
     }
 }

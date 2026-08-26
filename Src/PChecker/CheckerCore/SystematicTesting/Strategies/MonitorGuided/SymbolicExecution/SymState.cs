@@ -6,12 +6,13 @@ using System.Text;
 using System.Threading.Tasks;
 using Plang.Compiler.TypeChecker.AST.States;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided
+namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
 {
     internal sealed class SymState
     {
         public State CurrentState { get; }
         public Stack<StackFrame> CallStack { get; }
+        public Control Control { get; set; }
         public Dictionary<string, SymValue> Globals { get; }
         public PathCondition PathCondition { get; }
         public uint ObservedEvents { get; set; }
@@ -49,10 +50,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         }
     }
 
-    internal sealed class StackFrame
-    {
-        public Dictionary<string, SymValue> Locals { get; }
-        public string FunctionName { get; }
-        public int ProgramCounter { get; }
-    }
+    internal sealed record StackFrame(
+        Dictionary<string, SymValue> Locals,
+        string FunctionName,
+        RValueContinuation ReturnTo);
 }

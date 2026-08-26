@@ -62,7 +62,7 @@ public static class Checker
 
                     if (configuration.SchedulingStrategy is StrategyType.MonitorGuided)
                     {
-                        MonitorAnalyzer.CompileMonitors(configuration);
+                        MonitorInitializer.CompileMonitors(configuration);
                     }
 
                     foreach (string tc in testCases)
