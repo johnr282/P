@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Continuations;
 using Plang.Compiler.TypeChecker.AST.States;
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
@@ -25,12 +26,14 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
         public SymState(
             State currentState,
             Stack<StackFrame> callStack,
+            Control control,
             Dictionary<string, SymValue> globals,
             PathCondition pathCondition,
             uint observedEvents)
         {
             CurrentState = currentState;
             CallStack = callStack;
+            Control = control;
             Globals = globals;
             PathCondition = pathCondition;
             ObservedEvents = observedEvents;
@@ -41,17 +44,41 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
         /// </summary>
         public static SymState Clone(SymState state)
         {
+            Stack<StackFrame> clonedCallStack = new Stack<StackFrame>(
+                state.CallStack.Select(StackFrame.Clone).Reverse());
+
             return new SymState(
                 state.CurrentState,
-                new Stack<StackFrame>(state.CallStack.Reverse()),
+                clonedCallStack,
+                state.Control,
                 new Dictionary<string, SymValue>(state.Globals),
                 state.PathCondition,
                 state.ObservedEvents);
         }
     }
 
-    internal sealed record StackFrame(
-        Dictionary<string, SymValue> Locals,
-        string FunctionName,
-        RValueContinuation ReturnTo);
+    internal sealed class StackFrame
+    {
+        public Dictionary<string, SymValue> Locals { get; }
+        public string FunctionName { get; }
+        public RValueContinuation ReturnTo { get; }
+
+        public StackFrame(
+            Dictionary<string, SymValue> locals,
+            string functionName,
+            RValueContinuation returnTo)
+        {
+            Locals = locals;
+            FunctionName = functionName;
+            ReturnTo = returnTo;
+        }
+
+        public static StackFrame Clone(StackFrame frame)
+        {
+            return new StackFrame(
+                new Dictionary<string, SymValue>(frame.Locals),
+                frame.FunctionName,
+                frame.ReturnTo);
+        }
+    }
 }
