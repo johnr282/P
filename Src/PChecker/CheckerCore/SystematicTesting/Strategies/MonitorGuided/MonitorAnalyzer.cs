@@ -16,6 +16,8 @@ using Plang.Compiler.TypeChecker.AST.Statements;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution;
 using System.Diagnostics;
 using PChecker.Runtime.Values;
+using Plang.Compiler.TypeChecker.Types;
+using System.Collections.Immutable;
 
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided
@@ -114,7 +116,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             State currentState, 
             IReadOnlyDictionary<string, IPValue> concreteFields)
         {
-            // JR TODO
             Dictionary<string, SymExpr> symFields = new();
 
             foreach (var field in _monitorAST.Fields)
@@ -157,6 +158,10 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                     // JR TODO: Create new stack frame for the handler, adding a symbolic
                     // payload local variable for the event parameter, and add
                     // it to nextState.CallStack
+                    Event eventType = handler.Key;
+                    IStateAction handlerAction = handler.Value;
+
+
                     nextState.ObservedEvents++;
 
                     // JR TODO: TransitionEvent is symbolic event used for event parameter
