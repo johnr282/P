@@ -26,7 +26,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
             };
         }
 
-        internal static ExecutionResult StepStmt(
+        private static ExecutionResult StepStmt(
             SymState state, 
             StmtControl control)
         {
@@ -38,7 +38,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
             };
         }
 
-        internal static ExecutionResult StepAssignStmt(
+        private static ExecutionResult StepAssignStmt(
             SymState state,
             AssignStmt assignStmt, 
             StmtContinuation continuation)
@@ -50,14 +50,40 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
             return new SingleSuccessor(state);
         }
 
-        internal static ExecutionResult StepRValue(
+        private static SymState CompleteAssignStmt(
+            SymState state,
+            ResolvedLValue location, 
+            SymExpr value)
+        {
+            // JR TODO: Assign value to location in state.
+            return null;
+        }
+
+        private static ExecutionResult StepRValue(
             SymState state, 
             RValueControl control)
         {
             throw new NotImplementedException();
         }
 
-        internal static ExecutionResult StepLValue(
+        private static ExecutionResult CompleteRValue(
+            SymState state,
+            SymExpr value,
+            RValueContinuation continuation)
+        {
+            // JR TODO
+
+            //switch (continuation)
+            //{
+            //    case AssignValueContinuation assign:
+            //        state = CompleteAssignStmt(state, assign.Location, value);
+            //        state.Control = new StmtControl
+            //}
+
+            throw new NotImplementedException();
+        }
+
+        private static ExecutionResult StepLValue(
             SymState state, 
             LValueControl control)
         {
@@ -116,7 +142,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
         {
             var storage = expr.Variable.Role switch
             {
-                VariableRole.Field => VariableStorage.Global,
+                VariableRole.Field => VariableStorage.Field,
                 VariableRole.Local or VariableRole.Param or VariableRole.Temp =>
                     VariableStorage.Local,
                 _ => throw new PInternalException(

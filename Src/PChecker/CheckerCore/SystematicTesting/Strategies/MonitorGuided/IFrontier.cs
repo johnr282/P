@@ -22,6 +22,11 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// <param name="item">The removed next item.</param>
         /// <returns>True if an item was removed, false otherwise.</returns>
         bool TryRemoveNext(out T item);
+
+        /// <summary>
+        /// Removes all items from the frontier.
+        /// </summary>
+        void Clear();
     }
 
     internal class QueueFrontier<T> : IFrontier<T>
@@ -39,6 +44,12 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         {
             return queue.TryDequeue(out item);
         }
+
+        /// <inheritdoc/>
+        public void Clear()
+        {
+            queue.Clear();
+        }
     }
 
     internal class StackFrontier<T> : IFrontier<T>
@@ -55,6 +66,12 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         public bool TryRemoveNext(out T item)
         {
             return stack.TryPop(out item);
+        }
+
+        /// <inheritdoc/>
+        public void Clear()
+        {
+            stack.Clear();
         }
     }
 }

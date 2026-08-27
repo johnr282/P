@@ -14,27 +14,27 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
         public State CurrentState { get; }
         public Stack<StackFrame> CallStack { get; }
         public Control Control { get; set; }
-        public Dictionary<string, SymValue> Globals { get; }
+        public Dictionary<string, SymExpr> Fields { get; }
         public PathCondition PathCondition { get; }
         public uint ObservedEvents { get; set; }
 
         /// <summary>
-        /// Whether a monitor in this state is handling an event.
+        /// Whether a monitor in this state is waiting for an event.
         /// </summary>
-        public bool IsHandlingEvent => CallStack.TryPeek(out var _);
+        public bool WaitingForEvent => Control is WaitingForEventControl;
 
         public SymState(
             State currentState,
             Stack<StackFrame> callStack,
             Control control,
-            Dictionary<string, SymValue> globals,
+            Dictionary<string, SymExpr> fields,
             PathCondition pathCondition,
             uint observedEvents)
         {
             CurrentState = currentState;
             CallStack = callStack;
             Control = control;
-            Globals = globals;
+            Fields = fields;
             PathCondition = pathCondition;
             ObservedEvents = observedEvents;
         }
@@ -51,7 +51,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
                 state.CurrentState,
                 clonedCallStack,
                 state.Control,
-                new Dictionary<string, SymValue>(state.Globals),
+                new Dictionary<string, SymExpr>(state.Fields),
                 state.PathCondition,
                 state.ObservedEvents);
         }
@@ -59,12 +59,12 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
 
     internal sealed class StackFrame
     {
-        public Dictionary<string, SymValue> Locals { get; }
+        public Dictionary<string, SymExpr> Locals { get; }
         public string FunctionName { get; }
         public RValueContinuation ReturnTo { get; }
 
         public StackFrame(
-            Dictionary<string, SymValue> locals,
+            Dictionary<string, SymExpr> locals,
             string functionName,
             RValueContinuation returnTo)
         {
@@ -76,7 +76,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
         public static StackFrame Clone(StackFrame frame)
         {
             return new StackFrame(
-                new Dictionary<string, SymValue>(frame.Locals),
+                new Dictionary<string, SymExpr>(frame.Locals),
                 frame.FunctionName,
                 frame.ReturnTo);
         }

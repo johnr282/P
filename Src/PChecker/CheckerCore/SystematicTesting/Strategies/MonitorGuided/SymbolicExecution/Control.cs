@@ -15,6 +15,11 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
     internal abstract record Control;
 
     /// <summary>
+    /// Executor has no current work and is waiting to observe an event.
+    /// </summary>
+    internal sealed record WaitingForEventControl : Control;
+
+    /// <summary>
     /// Statement Stmt is being executed; once finished, Continuation defines the
     /// executor's next step.
     /// </summary>

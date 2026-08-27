@@ -12,7 +12,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.
     internal abstract record RValueContinuation;
 
     /// <summary>
-    /// Value of assign has been resolved; now assign it to Location.
+    /// Value of assign is being evaluated; next, assign it to Location.
     /// </summary>
     internal sealed record AssignValueContinuation(
         ResolvedLValue Location,

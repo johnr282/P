@@ -1,23 +1,19 @@
-﻿using System;
+﻿using Plang.Compiler.TypeChecker.AST.Declarations;
+using Plang.Compiler.TypeChecker.Types;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Plang.Compiler.TypeChecker.AST.Declarations;
-using Plang.Compiler.TypeChecker.Types;
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
 {
-    internal class SymValue
-    {
-    }
-
     /// <summary>
     /// Storage dictionaries in <see cref="SymState"/> that can hold a P variable.
     /// </summary>
     internal enum VariableStorage
     {
-        Global,
+        Field,
         Local
     }
 
@@ -44,12 +40,4 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
         ResolvedLValue Tuple,
         int FieldNo,
         PLanguageType FieldType) : ResolvedLValue(FieldType);
-
-    internal class SymEvent
-    {
-    }
-
-    internal class PathCondition
-    {
-    }
 }

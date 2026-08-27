@@ -15,6 +15,7 @@ using Plang.Compiler.TypeChecker.AST;
 using Plang.Compiler.TypeChecker.AST.Statements;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution;
 using System.Diagnostics;
+using PChecker.Runtime.Values;
 
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided
@@ -64,17 +65,21 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// <param name="currentState">
         /// Current state of the monitor state machine.
         /// </param>
-        /// <param name="concreteGlobals">
-        /// Current concrete values of monitor global variables.
+        /// <param name="concreteFields">
+        /// Current concrete values of monitor fields.
         /// </param>
         /// <param name="violatingExecution">Violating sequence of events.</param>
         /// <returns>True if a violating execution was found, false otherwise.</returns>
         internal bool FindViolatingExecution(
             State currentState,
-            Dictionary<string, object> concreteGlobals, 
+            IReadOnlyDictionary<string, IPValue> concreteFields, 
             out List<SymEvent> violatingExecution)
         {
-            // Construct initial exploration and place in frontier
+            ResetAnalyzer();
+
+            var initialState = ConstructInitialState(currentState, concreteFields);
+            var initialNode = new ExplorationNode(initialState, null, null);
+            _frontier.Add(initialNode);
 
             while (_frontier.TryRemoveNext(out var nextNode) &&
                 _violatingNode == null)
@@ -93,12 +98,51 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         }
 
         /// <summary>
+        /// Resets per-analysis analyzer state. 
+        /// </summary>
+        private void ResetAnalyzer()
+        {
+            _frontier.Clear();
+            _violatingNode = null;
+        }
+
+        /// <summary>
+        /// Returns the initial symbolic state of the monitor based on the 
+        /// current state and concrete monitor field values.
+        /// </summary>
+        private SymState ConstructInitialState(
+            State currentState, 
+            IReadOnlyDictionary<string, IPValue> concreteFields)
+        {
+            // JR TODO
+            Dictionary<string, SymExpr> symFields = new();
+
+            foreach (var field in _monitorAST.Fields)
+            {
+                if (!concreteFields.TryGetValue(field.Name, out var value))
+                {
+                    throw new PInternalException(
+                        $"Missing concrete value for monitor field '{field.Name}'");
+                }
+                symFields[field.Name] = new ConcreteExpr(value, field.Type);
+            }
+
+            return new SymState(
+                currentState,
+                new Stack<SymbolicExecution.StackFrame>(),
+                new WaitingForEventControl(),
+                symFields,
+                new PathCondition(),
+                0);
+        }
+
+        /// <summary>
         /// Compute successor nodes of the given node and add them to the frontier.
         /// </summary>
         private void ComputeSuccessorNodes(ExplorationNode node)
         {
             SymState state = node.SymbolicState;
-            if (!state.IsHandlingEvent)
+            if (state.WaitingForEvent)
             {
                 if (state.ObservedEvents >= _maxObservedEvents)
                 {
@@ -149,7 +193,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
                     case SingleSuccessor successor:
                         state = successor.Successor;
-                        if (!state.IsHandlingEvent)
+                        if (state.WaitingForEvent)
                         {
                             // Current event handler has completed
                             var nextNode = new ExplorationNode(
