@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using PChecker.Runtime.Values;
 
 namespace PChecker.Runtime.Specifications
 {
@@ -11,6 +12,6 @@ namespace PChecker.Runtime.Specifications
         /// <summary>
         /// Returns a dictionary containing the current values of all monitor fields.
         /// </summary>
-        public IReadOnlyDictionary<string, object> GetFieldValues();
+        public IReadOnlyDictionary<string, IPValue> GetFieldValues();
     }
 }

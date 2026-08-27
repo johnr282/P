@@ -331,10 +331,10 @@ namespace Plang.Compiler.Backend.CSharp
         private void WriteMonitorFieldProvider(CompilationContext context, StringWriter output, Machine machine)
         {
             context.WriteLine(output,
-                "public IReadOnlyDictionary<string, object> GetFieldValues()");
+                "public IReadOnlyDictionary<string, IPValue> GetFieldValues()");
             context.WriteLine(output, "{");
             context.WriteLine(output,
-                "return new Dictionary<string, object>");
+                "return new Dictionary<string, IPValue>");
             context.WriteLine(output, "{");
 
             foreach (var field in machine.Fields)
@@ -342,7 +342,7 @@ namespace Plang.Compiler.Backend.CSharp
                 var pName = field.Name;
                 var generatedName = context.Names.GetNameForDecl(field);
                 context.WriteLine(output,
-                    $"[\"{pName}\"] = {generatedName},"); 
+                    $"[\"{pName}\"] = ((IPValue){generatedName})?.Clone(),");
             }
 
             context.WriteLine(output, "    };");
