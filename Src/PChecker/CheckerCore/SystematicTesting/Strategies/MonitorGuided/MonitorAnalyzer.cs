@@ -62,7 +62,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         }
 
         /// <summary>
-        /// Attempts to find a sequence of events resulting in a monitor assertion failure.
+        /// Attempts to find a family of executions resulting in monitor assertion failures.
         /// </summary>
         /// <param name="currentState">
         /// Current state of the monitor state machine.
@@ -70,12 +70,12 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// <param name="concreteFields">
         /// Current concrete values of monitor fields.
         /// </param>
-        /// <param name="violatingExecution">Violating sequence of events.</param>
-        /// <returns>True if a violating execution was found, false otherwise.</returns>
-        internal bool FindViolatingExecution(
+        /// <param name="guidance">Monitor guidance representing a family of violating executions.</param>
+        /// <returns>True if violating executions were found, false otherwise.</returns>
+        internal bool GetMonitorGuidance(
             State currentState,
             IReadOnlyDictionary<string, IPValue> concreteFields, 
-            out List<SymEvent> violatingExecution)
+            out MonitorGuidance guidance)
         {
             ResetAnalyzer();
 
@@ -91,11 +91,11 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
             if (_violatingNode == null)
             {
-                violatingExecution = null;
+                guidance = null;
                 return false;
             }
 
-            violatingExecution = ComputeCausalExecution(_violatingNode);
+            guidance = ComputeGuidance(_violatingNode);
             return true;
         }
 
@@ -133,7 +133,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 new Stack<SymbolicExecution.StackFrame>(),
                 new WaitingForEventControl(),
                 symFields,
-                new PathCondition(),
+                SymExpr.True,
                 0);
         }
 
@@ -225,9 +225,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         }
 
         /// <summary>
-        /// Computes sequence of events leading to the given node.
+        /// Computes monitor guidance leading to the given node.
         /// </summary>
-        private List<SymEvent> ComputeCausalExecution(ExplorationNode node)
+        private MonitorGuidance ComputeGuidance(ExplorationNode node)
         {
             List<SymEvent> execution = new();
 
@@ -241,7 +241,10 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             }
 
             execution.Reverse();
-            return execution;
+            // JR TODO: If path condition contains constraints over local variables,
+            // or monitor fields, they must be removed; violation condition should
+            // only contain constraints over symbolic event payloads
+            return new MonitorGuidance(execution, node.SymbolicState.PathCondition);
         }
 
         internal enum SearchStrategy

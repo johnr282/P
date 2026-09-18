@@ -11,7 +11,10 @@ using Plang.Compiler.TypeChecker.Types;
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
 {
-    internal abstract record SymExpr(PLanguageType Type);
+    internal abstract record SymExpr(PLanguageType Type)
+    {
+        internal static SymExpr True => new ConcreteExpr((PBool)true, PrimitiveType.Bool);
+    }
 
     internal sealed record ConcreteExpr(IPValue Value, PLanguageType Type) 
         : SymExpr(Type);
@@ -41,9 +44,4 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
         NamedTupleType TupleType) : SymExpr(TupleType);
 
     internal sealed record SymEvent(Event Event, SymExpr Payload);
-
-    // JR TODO
-    internal class PathCondition
-    {
-    }
 }

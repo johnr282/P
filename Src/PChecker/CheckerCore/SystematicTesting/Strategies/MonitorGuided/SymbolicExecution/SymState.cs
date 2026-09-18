@@ -15,7 +15,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
         public Stack<StackFrame> CallStack { get; }
         public Control Control { get; set; }
         public Dictionary<string, SymExpr> Fields { get; }
-        public PathCondition PathCondition { get; }
+        public SymExpr PathCondition { get; }
         public uint ObservedEvents { get; set; }
 
         /// <summary>
@@ -28,7 +28,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
             Stack<StackFrame> callStack,
             Control control,
             Dictionary<string, SymExpr> fields,
-            PathCondition pathCondition,
+            SymExpr pathCondition,
             uint observedEvents)
         {
             CurrentState = currentState;
