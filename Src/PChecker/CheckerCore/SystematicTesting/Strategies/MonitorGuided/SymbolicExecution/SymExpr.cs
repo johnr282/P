@@ -11,10 +11,7 @@ using Plang.Compiler.TypeChecker.Types;
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
 {
-    internal abstract record SymExpr(PLanguageType Type)
-    {
-        internal static SymExpr True => new ConcreteExpr((PBool)true, PrimitiveType.Bool);
-    }
+    internal abstract record SymExpr(PLanguageType Type);
 
     internal sealed record ConcreteExpr(IPValue Value, PLanguageType Type) 
         : SymExpr(Type);

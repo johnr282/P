@@ -133,7 +133,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 new Stack<SymbolicExecution.StackFrame>(),
                 new WaitingForEventControl(),
                 symFields,
-                SymExpr.True,
+                SymExprFactory.True,
                 0);
         }
 
@@ -230,6 +230,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private MonitorGuidance ComputeGuidance(ExplorationNode node)
         {
             List<SymEvent> execution = new();
+            var violationCondition = node.SymbolicState.PathCondition;
 
             while (node != null)
             {
@@ -244,7 +245,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             // JR TODO: If path condition contains constraints over local variables,
             // or monitor fields, they must be removed; violation condition should
             // only contain constraints over symbolic event payloads
-            return new MonitorGuidance(execution, node.SymbolicState.PathCondition);
+            return new MonitorGuidance(execution, violationCondition);
         }
 
         internal enum SearchStrategy
