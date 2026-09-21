@@ -19,8 +19,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
     internal sealed record SymbolExpr(SymbolID ID, PLanguageType Type)
         : SymExpr(Type);
 
-    internal sealed record SymbolID(long Value);
-
     internal sealed record BinaryExpr(
         BinOpType Op,
         SymExpr Left,
@@ -41,4 +39,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
         NamedTupleType TupleType) : SymExpr(TupleType);
 
     internal sealed record SymEvent(Event Event, SymExpr Payload);
+
+    internal sealed record SymbolID(long Value);
 }
