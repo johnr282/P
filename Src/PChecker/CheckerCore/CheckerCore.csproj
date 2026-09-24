@@ -41,4 +41,7 @@
 	<ItemGroup>
 	  <PackageReference Include="Microsoft.Z3" Version="4.12.2" />
 	</ItemGroup>
+    <ItemGroup>
+        <InternalsVisibleTo Include="UnitTests" />
+    </ItemGroup>
 </Project>
