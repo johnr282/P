@@ -39,7 +39,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
 
         internal static SymExpr Equal(SymExpr left, SymExpr right)
         {
-            if (!left.Type.IsSameTypeAs(right.Type))
+            if (!left.Type.IsAssignableFrom(right.Type) &&
+                !right.Type.IsAssignableFrom(left.Type))
             {
                 throw new ArgumentException(
                     $"Both operands must be of the same type. Types: {left.Type}, {right.Type}");

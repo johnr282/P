@@ -5,7 +5,7 @@ using Plang.Compiler.TypeChecker.AST.Declarations;
 
 namespace Plang.Compiler.TypeChecker.Types
 {
-    internal class MapType : PLanguageType
+    public class MapType : PLanguageType
     {
         public MapType(PLanguageType keyType, PLanguageType valueType) : base(TypeKind.Map)
         {

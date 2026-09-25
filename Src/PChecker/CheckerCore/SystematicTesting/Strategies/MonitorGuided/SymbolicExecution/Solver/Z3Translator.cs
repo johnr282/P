@@ -8,7 +8,7 @@ using Plang.Compiler.TypeChecker.AST.Expressions;
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solver
 {
-    internal class Z3Translator
+    internal partial class Z3Translator
     {
         private readonly Context _context;
         private const uint IntWidth = 64;
@@ -39,8 +39,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.
             // Constraints belong to this formula, including when the translator is reused.
             _domainConstraints.Clear();
             _symbols.Clear();
+            _collectionOrders.Clear();
             _evaluationGuard = _context.MkTrue();
-            BoolExpr boolExpr = TranslateBoolean(expr);
+            BoolExpr boolExpr = (BoolExpr)TranslateExpr(expr);
 
             return _context.MkAnd(_domainConstraints.Append(boolExpr).ToArray());
         }
@@ -50,12 +51,28 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.
             var type = expr.Type.Canonicalize();
             RejectUnsupportedTypes(type);
 
+            // Collection queries can return any supported type, including a
+            // scalar, tuple, or another collection. Dispatch before result types.
+            switch (expr)
+            {
+                case CollectionAccessExpr access: return TranslateCollectionAccess(access);
+                case CollectionSizeExpr size: return TranslateCollectionSize(size);
+                case CollectionContainsExpr contains: return TranslateCollectionContains(contains);
+                case MapKeysExpr keys: return TranslateMapProjection(keys.Map, keys.SequenceType, false);
+                case MapValuesExpr values: return TranslateMapProjection(values.Map, values.SequenceType, true);
+                case CollectionUpdateExpr update: return TranslateCollectionUpdate(update);
+                case CollectionInsertExpr insert: return TranslateCollectionInsert(insert);
+                case SetAddExpr add: return TranslateSetAdd(add);
+                case CollectionRemoveExpr remove: return TranslateCollectionRemove(remove);
+            }
+
             return type switch
             {
                 PrimitiveType => TranslatePrimitive(expr),
                 EnumType => TranslateEnum(expr),
                 TupleType or NamedTupleType => TranslateTuple(expr),
                 PermissionType => TranslateIdentity(expr),
+                SequenceType or SetType or MapType => TranslateCollection(expr),
                 _ => throw new NotSupportedException($"Unsupported P type: {type}")
             };
         }
@@ -427,6 +444,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.
                     ).ToArray());
             }
 
+            if (IsCollectionType(leftType))
+                return CollectionEqual(leftType, rightType, (SeqExpr)left, (SeqExpr)right);
+
             if (leftType.IsSameTypeAs(PrimitiveType.Float))
                 return _context.MkFPEq((FPExpr)left, (FPExpr)right);
 
@@ -478,6 +498,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.
                 sort = _context.StringSort;
             else if (IsNullableIdentityType(type)) 
                 sort = _context.IntSort;
+            else if (IsCollectionType(type))
+                sort = CreateCollectionSort(type);
             else if (type is TupleType or NamedTupleType)
             {
                 var fieldSorts = GetFieldTypes(type).Select(TranslateSort).ToArray();
@@ -496,34 +518,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.
 
         private void AddDomainConstraints(PLanguageType type, Expr expression)
         {
-            type = type.Canonicalize();
-            if (type is EnumType enumType)
-            {
-                // Restrict enums to valid values according to P declaration
-                _domainConstraints.Add(_context.MkOr(
-                    enumType.EnumDecl.Values.Select(
-                        e => _context.MkEq(
-                            expression, 
-                            _context.MkBV(e.Value, IntWidth))
-                        ).ToArray()));
-            }
-            else if (type is TupleType or NamedTupleType)
-            {
-                var fields = ((TupleSort)TranslateSort(type)).FieldDecls;
-                var types = GetFieldTypes(type);
-                for (var i = 0; i < fields.Length; i++)
-                {
-                    AddDomainConstraints(types[i], fields[i].Apply(expression));
-                }
-            }
-            else if (type.IsSameTypeAs(PrimitiveType.Null))
-            {
-                _domainConstraints.Add(_context.MkEq(expression, _context.MkInt(0)));
-            }
-            else if (IsNullableIdentityType(type))
-            {
-                _domainConstraints.Add(_context.MkGe((IntExpr)expression, _context.MkInt(0)));
-            }
+            _domainConstraints.Add(ValueDomain(type.Canonicalize(), expression));
         }
 
         private static bool IsMachineType(PLanguageType type) =>
@@ -545,6 +540,13 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.
             {
                 foreach (var fieldType in GetFieldTypes(type)) RejectUnsupportedTypes(fieldType);
             }
+            else if (type is SequenceType sequence) RejectUnsupportedTypes(sequence.ElementType);
+            else if (type is SetType set) RejectUnsupportedTypes(set.ElementType);
+            else if (type is MapType map)
+            {
+                RejectUnsupportedTypes(map.KeyType);
+                RejectUnsupportedTypes(map.ValueType);
+            }
         }
 
         private Expr TranslateIdentity(SymExpr expr)
@@ -553,9 +555,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.
             if (!IsNullableIdentityType(type))
                 throw new NotSupportedException($"Unsupported P type: {type}");
 
-            // Machines, interfaces, and null are represented by
-            // integer labels. Zero represents null. Non-null identities are
-            // positive and preserve runtime equality.
+            // Machines and null are represented by integer labels. Zero represents
+            // null. Non-null identities are positive and preserve runtime equality.
             if (expr is SymbolExpr symbol) return TranslateSymbol(symbol);
 
             // Identity types are not compound expressions, so expr must either be 

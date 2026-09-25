@@ -20,9 +20,12 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
                 case PrimitiveType primitive when primitive == PrimitiveType.Null:
                     return new ConcreteExpr(null, primitive);
 
+                case PermissionType:
                 case PrimitiveType:
-                    // JR TODO: Add special handling for Event, Machine, and Any 
                 case EnumType:
+                case SequenceType:
+                case SetType:
+                case MapType:
                     return NewSymbol(type);
 
                 case TupleType tuple:

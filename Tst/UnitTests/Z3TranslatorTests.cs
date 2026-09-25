@@ -317,7 +317,7 @@ namespace UnitTests
             var translator = new Z3Translator(context);
             Assert.Throws<ArgumentException>(() => translator.Translate(Eq(Symbol(1, PrimitiveType.Int), Symbol(1, PrimitiveType.Bool))));
             Assert.Throws<ArgumentException>(() => translator.Translate(Int(1)));
-            Assert.Throws<NotSupportedException>(() => translator.Translate(Eq(Symbol(1, new SequenceType(PrimitiveType.Int)), Symbol(2, new SequenceType(PrimitiveType.Int)))));
+            Check(Eq(Symbol(1, new SequenceType(PrimitiveType.Int)), Symbol(2, new SequenceType(PrimitiveType.Int))));
         }
     }
 }
