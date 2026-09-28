@@ -12,7 +12,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 {
     internal class MonitorGuidedStrategy : ISchedulingStrategy
     {
-        private readonly Dictionary<Machine, Monitor> monitors = new();
+        // For now, assume that there is only one monitor.
+        private Monitor _monitor;
+        private MonitorAnalyzer _monitorAnalyzer;
 
         private readonly uint maxObservedEventsForMonitorExploration;
 
@@ -24,11 +26,32 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
         /// <summary>
         /// Registers the given monitor AST with its corresponding runtime 
-        /// monitor instance.
+        /// monitor instance and creates its analyzer.
         /// </summary>
         public void RegisterMonitor(Machine monitorAST, Monitor monitor)
         {
-            monitors[monitorAST] = monitor;
+            if (_monitor != null)
+            {
+                Error.CheckerReportAndExit(
+                    $"MonitorGuided strategy currently supports only one monitor. " +
+                    $"Found multiple monitors: {_monitor.Name} and {monitorAST.Name}.");
+                return;
+            }
+
+            if (monitor is not IMonitorFieldProvider fieldProvider)
+            {
+                Error.CheckerReportAndExit(
+                    $"Monitor {monitorAST.Name} does not implement IMonitorFieldProvider " +
+                    $"required by MonitorGuided strategy.");
+                return;
+            }
+
+            _monitor = monitor;
+            _monitorAnalyzer = new MonitorAnalyzer(
+                monitorAST,
+                fieldProvider,
+                maxObservedEventsForMonitorExploration,
+                MonitorAnalyzer.SearchStrategy.BFS);
         }
 
         /// <inheritdoc/>
@@ -39,22 +62,23 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         {
             next = null;
 
-            foreach (var (monitorAST, monitor) in monitors)
+            bool monitorViolationFound = _monitorAnalyzer.GetMonitorGuidance(
+                _monitor.CurrentStateName,
+                out var guidance);
+
+            if (!monitorViolationFound)
             {
-                if (monitor is not IMonitorFieldProvider fieldProvider)
-                {
-                    Error.CheckerReportAndExit(
-                        $"Monitor {monitorAST.Name} does not implement IMonitorFieldProvider " +
-                        $"required by MonitorGuided strategy.");
-                    return false;
-                }
-
-                var monitorFieldValues = fieldProvider.GetFieldValues();
-                var monitorState = monitor.CurrentStateName;
-
-                // JR TODO: Write monitor exploration procedure
+                return GetFallbackChoice(lastChoice, choices, out next);
             }
 
+            throw new NotImplementedException();
+        }
+
+        private bool GetFallbackChoice(
+            SchedulingChoice lastChoice,
+            IEnumerable<SchedulingChoice> choices,
+            out SchedulingChoice next)
+        {
             throw new NotImplementedException();
         }
 
@@ -79,7 +103,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// <inheritdoc/>
         public virtual bool PrepareForNextIteration()
         {
-            monitors.Clear();
+            _monitor = null;
+            _monitorAnalyzer = null;
             return true;
         }
 

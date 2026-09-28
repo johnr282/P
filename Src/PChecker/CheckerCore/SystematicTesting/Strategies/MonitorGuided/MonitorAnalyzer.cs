@@ -25,7 +25,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
     internal class MonitorAnalyzer
     {
         private readonly Machine _monitorAST;
-        
+
+        private readonly IMonitorFieldProvider _fieldProvider;
+
         private readonly IFrontier<ExplorationNode> _frontier;
 
         private readonly uint _maxObservedEvents;
@@ -38,6 +40,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// <param name="monitor">
         /// Typed AST of the monitor state machine to analyze.
         /// </param>
+        /// /// <param name="fieldProvider">
+        /// Object providing access to the runtime concrete values of monitor fields.
+        /// </param>
         /// <param name="maxEvents">
         /// Maximum observed events in a single explored monitor execution.
         /// </param>
@@ -46,10 +51,12 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// </param>
         internal MonitorAnalyzer(
             Machine monitor,
+            IMonitorFieldProvider fieldProvider,
             uint maxEvents,
             SearchStrategy strategy)
         {
             _monitorAST = monitor;
+            _fieldProvider = fieldProvider;
             _maxObservedEvents = maxEvents;
 
             _frontier = strategy switch
@@ -64,21 +71,22 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// <summary>
         /// Attempts to find a family of executions resulting in monitor assertion failures.
         /// </summary>
-        /// <param name="currentState">
-        /// Current state of the monitor state machine.
-        /// </param>
-        /// <param name="concreteFields">
-        /// Current concrete values of monitor fields.
+        /// <param name="currentStateName">
+        /// Name of the current state of the runtime monitor state machine.
         /// </param>
         /// <param name="guidance">Monitor guidance representing a family of violating executions.</param>
         /// <returns>True if violating executions were found, false otherwise.</returns>
         internal bool GetMonitorGuidance(
-            State currentState,
-            IReadOnlyDictionary<string, IPValue> concreteFields, 
+            string currentStateName,
             out MonitorGuidance guidance)
         {
             ResetAnalyzer();
 
+            var currentState = _monitorAST.GetState(currentStateName)
+                ?? throw new PInternalException(
+                    $"State '{currentStateName}' was not found in monitor '{_monitorAST.Name}'.");
+
+            var concreteFields = _fieldProvider.GetFieldValues();
             var initialState = ConstructInitialState(currentState, concreteFields);
             var initialNode = new ExplorationNode(initialState, null, null);
             _frontier.Add(initialNode);
