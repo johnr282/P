@@ -389,7 +389,7 @@ namespace PChecker.Runtime.StateMachines
         /// <param name="e">The event to send.</param>
         protected void Monitor(Type type, Event e)
         {
-            Runtime.Monitor(type, e, Id.Name, Id.Type, CurrentStateName);
+            Runtime.Monitor(type, e, Id, CurrentStateName);
         }
         
         /// <summary>

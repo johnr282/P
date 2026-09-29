@@ -72,6 +72,12 @@ namespace PChecker.SystematicTesting
         internal SchedulingChoice LastSchedulingChoice { get; private set; }
 
         /// <summary>
+        /// True while the current choice has an execution observation to report,
+        /// including observations with no effects.
+        /// </summary>
+        private bool HasPendingObservation;
+
+        /// <summary>
         /// The currently scheduled asynchronous operation.
         /// </summary>
         internal AsyncOperation ScheduledOperation => LastSchedulingChoice.Operation;
@@ -147,6 +153,8 @@ namespace PChecker.SystematicTesting
                 CheckNoExternalConcurrencyUsed();
             }
 
+            FlushExecutionEffects();
+
             // Checks if the scheduling steps bound has been reached.
             CheckIfSchedulingStepsBoundIsReached();
 
@@ -176,6 +184,7 @@ namespace PChecker.SystematicTesting
             }
 
             LastSchedulingChoice = nextChoice;
+            HasPendingObservation = true;
             HandleEventDeliveryChoice(nextChoice);
 
             var nextOp = nextChoice.Operation;
@@ -441,6 +450,7 @@ namespace PChecker.SystematicTesting
                 // Create an initial scheduling choice; first registered operation should
                 // always be a TaskOperation corresponding to the initial test task.
                 LastSchedulingChoice = new RunTaskChoice((TaskOperation)op);
+                HasPendingObservation = true;
             }
 
             return OperationMap.TryAdd(op.Id, op);
@@ -770,6 +780,12 @@ namespace PChecker.SystematicTesting
 #endif
         internal void NotifyAssertionFailure(string text, bool killTasks = true, bool cancelExecution = true)
         {
+            if (killTasks || cancelExecution)
+            {
+                // Preserve the failing segment before invoking external failure callbacks.
+                FlushExecutionEffects();
+            }
+
             if (!BugFound)
             {
                 BugReport = text;
@@ -801,11 +817,27 @@ namespace PChecker.SystematicTesting
         internal Task WaitAsync() => CompletionSource.Task;
 
         /// <summary>
+        /// Reports the current execution segment exactly once, even if it produced no effects.
+        /// </summary>
+        private void FlushExecutionEffects()
+        {
+            if (!HasPendingObservation)
+            {
+                return;
+            }
+
+            HasPendingObservation = false;
+            var effects = Runtime.GetAndClearEffects();
+            Strategy.NotifyEffects(LastSchedulingChoice, effects);
+        }
+
+        /// <summary>
         /// Stops the scheduler.
         /// </summary>
         private void Stop()
         {
             IsRunning = false;
+            FlushExecutionEffects();
             KillRemainingOperations();
 
             // Check if the completion source is completed. If not synchronize on

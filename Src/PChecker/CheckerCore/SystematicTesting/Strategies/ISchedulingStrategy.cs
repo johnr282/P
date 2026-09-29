@@ -75,5 +75,17 @@ namespace PChecker.SystematicTesting.Strategies
         /// parent strategies to reset child strategies.
         /// </summary>
         void Reset();
+
+        /// <summary>
+        /// Notifies the scheduling strategy of the execution effects resulting 
+        /// from its last scheduling choice.
+        /// </summary>
+        /// <param name="lastChoice">
+        /// The last scheduling choice returned by the strategy.
+        /// </param>
+        /// <param name="effects">Effects in order of execution. </param>
+        void NotifyEffects(
+            SchedulingChoice lastChoice, 
+            IReadOnlyList<ExecutionEffect> effects);
     }
 }

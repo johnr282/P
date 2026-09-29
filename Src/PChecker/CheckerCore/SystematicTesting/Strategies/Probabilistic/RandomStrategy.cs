@@ -107,5 +107,13 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         {
             ScheduledSteps = 0;
         }
+
+        /// <inheritdoc/>
+        public virtual void NotifyEffects(
+            SchedulingChoice lastChoice,
+            IReadOnlyList<ExecutionEffect> effects) 
+        { 
+            // Intentionally empty
+        }
     }
 }

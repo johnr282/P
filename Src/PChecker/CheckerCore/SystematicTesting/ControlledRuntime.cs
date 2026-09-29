@@ -131,7 +131,13 @@ namespace PChecker.SystematicTesting
         /// Map from unique state machine ids to state machines.
         /// </summary>
         private readonly ConcurrentDictionary<StateMachineId, StateMachine> StateMachineMap;
-        
+
+        /// <summary>
+        /// Used to keep track of the execution effects resulting from the most
+        /// recent scheduling choice. 
+        /// </summary>
+        private readonly List<ExecutionEffect> EffectsSinceLastSchedulingChoice = new();
+
         /// <summary>
         /// Callback that is fired when an event is dropped.
         /// </summary>
@@ -452,6 +458,7 @@ namespace PChecker.SystematicTesting
 
             var stateMachine = CreateStateMachine(id, type, name, creator, initialEvent);
             RunStateMachineEventHandler(stateMachine, true, null);
+
             return stateMachine.Id;
         }
 
@@ -522,6 +529,9 @@ namespace PChecker.SystematicTesting
             var result = Scheduler.RegisterOperation(new StateMachineOperation(stateMachine));
             Assert(result, "StateMachine id '{0}' is used by an existing or previously halted state machine.", id.Value);
             LogWriter.LogCreateStateMachine(id, creator?.Id.Name, creator?.Id.Type);
+
+            EffectsSinceLastSchedulingChoice.Add(
+                new CreateEffect(creator?.Id, stateMachine.Id));
 
             return stateMachine;
         }
@@ -641,6 +651,9 @@ namespace PChecker.SystematicTesting
 
             Scheduler.ScheduleNextEnabledOperation(AsyncOperationType.Send);
             ResetProgramCounter(sender);
+
+            EffectsSinceLastSchedulingChoice.Add(
+                new SendEffect(sender?.Id, e, targetId));
 
             if (target.IsHalted)
             {
@@ -797,7 +810,7 @@ namespace PChecker.SystematicTesting
         {
             // If the event is null then report an error and exit.
             Assert(e != null, "Cannot monitor a null event.");
-            Monitor(typeof(T), e, null, null, null);
+            Monitor(typeof(T), e, null, null);
         }
 
         /// <summary>
@@ -833,13 +846,15 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// Invokes the specified <see cref="Runtime.Specifications.Monitor"/> with the specified <see cref="Event"/>.
         /// </summary>
-        internal void Monitor(Type type, Event e, string senderName, string senderType, string senderStateName)
+        internal void Monitor(Type type, Event e, StateMachineId senderId, string senderStateName)
         {
+            EffectsSinceLastSchedulingChoice.Add(new AnnounceEffect(senderId, e));
+
             foreach (var monitor in Monitors)
             {
                 if (monitor.GetType() == type)
                 {
-                    monitor.MonitorEvent(e, senderName, senderType, senderStateName);
+                    monitor.MonitorEvent(e, senderId?.Name, senderId?.Type, senderStateName);
                     break;
                 }
             }
@@ -1447,6 +1462,17 @@ namespace PChecker.SystematicTesting
             }
 
             OnFailure?.Invoke(exception);
+        }
+
+        /// <summary>
+        /// Returns the execution effects recorded since the last scheduling choice
+        /// and clears this list. Called by the OperationScheduler.
+        /// </summary>
+        internal IReadOnlyList<ExecutionEffect> GetAndClearEffects()
+        {
+            var effects = EffectsSinceLastSchedulingChoice.ToArray();
+            EffectsSinceLastSchedulingChoice.Clear();
+            return effects;
         }
 
         /// <summary>

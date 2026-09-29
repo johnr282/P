@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using PChecker.IO.Debugging;
 using PChecker.Runtime.Specifications;
+using PChecker.Runtime.StateMachines;
 using PChecker.SystematicTesting.Operations;
 using Plang.Compiler.TypeChecker.AST.Declarations;
 
@@ -12,11 +14,14 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 {
     internal class MonitorGuidedStrategy : ISchedulingStrategy
     {
+        private readonly uint maxObservedEventsForMonitorExploration;
+
         // For now, assume that there is only one monitor.
         private Monitor _monitor;
         private MonitorAnalyzer _monitorAnalyzer;
 
-        private readonly uint maxObservedEventsForMonitorExploration;
+        private readonly Dictionary<StateMachineId, List<SchedulingChoice>> 
+            _localTraces = new();
 
         public MonitorGuidedStrategy()
         {
@@ -136,6 +141,14 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         public virtual void Reset()
         {
             throw new NotImplementedException();
+        }
+
+        /// <inheritdoc/>
+        public virtual void NotifyEffects(
+            SchedulingChoice lastChoice,
+            IReadOnlyList<ExecutionEffect> effects)
+        {
+            // JR TODO
         }
     }
 }
