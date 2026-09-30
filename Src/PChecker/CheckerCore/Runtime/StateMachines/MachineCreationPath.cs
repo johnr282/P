@@ -17,24 +17,12 @@ namespace PChecker.Runtime.StateMachines
         /// This machine is the nth machine created by the machine identified
         /// by creatorPath. 
         /// </summary>
-        public List<uint> CreationPath { get; }
+        public IReadOnlyList<uint> CreationPath { get; }
 
-        public MachineCreationPath(List<uint> creationPath)
+        public MachineCreationPath(IReadOnlyList<uint> creationPath)
         {
             ArgumentNullException.ThrowIfNull(creationPath);
-            CreationPath = new(creationPath);
-        }
-
-        /// <summary>
-        /// Returns the next path for a creation by this machine.
-        /// </summary>
-        public MachineCreationPath NewPath()
-        {
-            uint count = CreationCounter;
-            CreationCounter++;
-            var path = new List<uint>(CreationPath);
-            path.Add(count);
-            return new MachineCreationPath(path);
+            CreationPath = creationPath.ToList().AsReadOnly();
         }
 
         public override bool Equals(object obj)
@@ -46,7 +34,10 @@ namespace PChecker.Runtime.StateMachines
         public override int GetHashCode()
         {
             var hash = new HashCode();
-            CreationPath.ForEach(x => hash.Add(x));
+            foreach (var x in CreationPath)
+            {
+                hash.Add(x);
+            }
             return hash.ToHashCode();
         }
     }
@@ -57,25 +48,33 @@ namespace PChecker.Runtime.StateMachines
 
         private readonly Dictionary<MachineCreationPath, uint> _creationCounters = new();
 
-        public MachineCreationPath NewRootPath()
+        /// <summary>
+        /// Creates and returns a new creation path for a machine created by 
+        /// creator. If creator is null, returns a new root path. 
+        /// </summary>
+        public MachineCreationPath NewPath(StateMachine creator)
         {
-            uint rootCount = _rootCreationCounter;
-            _rootCreationCounter++;
-            return new MachineCreationPath(new List<uint> { rootCount });
-        }
+            if (creator == null) return NewRootPath();
 
-        public MachineCreationPath NewPath(MachineCreationPath creatorPath)
-        {
+            var creatorPath = creator.Id.CreationPath;
+
             if (!_creationCounters.TryGetValue(creatorPath, out uint counter))
             {
                 counter = 0;
                 _creationCounters[creatorPath] = counter;
             }
 
-            var path = new List<uint>(creatorPath.CreationPath);
+            var path = creatorPath.CreationPath.ToList();
             path.Add(counter);
             _creationCounters[creatorPath]++;
             return new MachineCreationPath(path);
+        }
+
+        private MachineCreationPath NewRootPath()
+        {
+            uint rootCount = _rootCreationCounter;
+            _rootCreationCounter++;
+            return new MachineCreationPath(new List<uint> { rootCount });
         }
     }
 }

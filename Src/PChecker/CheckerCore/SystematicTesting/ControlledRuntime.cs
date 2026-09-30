@@ -272,91 +272,18 @@ namespace PChecker.SystematicTesting
         /// Assigns the specified runtime as the default for the current asynchronous control flow.
         /// </summary>
         internal static void AssignAsyncControlFlowRuntime(ControlledRuntime runtime) => AsyncLocalInstance.Value = runtime;
-        
-        /// <summary>
-        /// Creates a fresh state machine id that has not yet been bound to any state machine.
-        /// </summary>
-        public StateMachineId CreateStateMachineId(Type type, StateMachine creator, string name = null) => new StateMachineId(type, name, creator, this);
-
-        /// <summary>
-        /// Creates an state machine id that is uniquely tied to the specified unique name. The
-        /// returned state machine id can either be a fresh id (not yet bound to any state machine), or
-        /// it can be bound to a previously created state machine. In the second case, this state machine
-        /// id can be directly used to communicate with the corresponding state machine.
-        /// </summary>
-        public StateMachineId CreateStateMachineIdFromName(Type type, StateMachine creator, string name)
-        {
-            // It is important that all state machine ids use the monotonically incrementing
-            // value as the id during testing, and not the unique name.
-            if (!NameValueToStateMachineId.TryGetValue(name, out var id))
-            {
-                // Creating a StateMachineId advances the creation counter, so only
-                // do so if an id doesn't already exist
-                id = new StateMachineId(type, name, creator, this);
-                NameValueToStateMachineId[name] = id;
-            }
-
-            return id;
-        }
-
-        /// <summary>
-        /// Creates a new state machine of the specified <see cref="Type"/> and with the specified
-        /// optional <see cref="Event"/>. This event can only be used to access its payload,
-        /// and cannot be handled.
-        /// </summary>
-        public StateMachineId CreateStateMachine(Type type, Event initialEvent = null) =>
-            CreateStateMachine(null, type, null, initialEvent);
 
         /// <summary>
         /// Creates a new state machine of the specified <see cref="Type"/> and name, and with the
         /// specified optional <see cref="Event"/>. This event can only be used to access
         /// its payload, and cannot be handled.
         /// </summary>
-        public StateMachineId CreateStateMachine(Type type, string name, Event initialEvent = null) =>
-            CreateStateMachine(null, type, name, initialEvent);
-
-        /// <summary>
-        /// Creates a new state machine of the specified type, using the specified <see cref="StateMachineId"/>.
-        /// This method optionally passes an <see cref="Event"/> to the new state machine, which can only
-        /// be used to access its payload, and cannot be handled.
-        /// </summary>
-        public StateMachineId CreateStateMachine(StateMachineId id, Type type, Event initialEvent = null)
+        public StateMachineId CreateStateMachine(Type type, string name, Event initialEvent = null)
         {
-            Assert(id != null, "Cannot create an state machine using a null state machine id.");
-            return CreateStateMachine(id, type, null, initialEvent);
+            var creatorOp = Scheduler.GetExecutingOperation<StateMachineOperation>();
+            return CreateStateMachine(type, name, initialEvent, creatorOp?.StateMachine);
         }
-
-        /// <summary>
-        /// Creates a new state machine of the specified <see cref="Type"/> and with the specified
-        /// optional <see cref="Event"/>. This event can only be used to access its payload,
-        /// and cannot be handled. The method returns only when the state machine is initialized and
-        /// the <see cref="Event"/> (if any) is handled.
-        /// </summary>
-        public Task<StateMachineId> CreateStateMachineAndExecuteAsync(Type type, Event e = null) =>
-            CreateStateMachineAndExecuteAsync(null, type, null, e);
-
-        /// <summary>
-        /// Creates a new state machine of the specified <see cref="Type"/> and name, and with the
-        /// specified optional <see cref="Event"/>. This event can only be used to access
-        /// its payload, and cannot be handled. The method returns only when the state machine is
-        /// initialized and the <see cref="Event"/> (if any) is handled.
-        /// </summary>
-        public Task<StateMachineId> CreateStateMachineAndExecuteAsync(Type type, string name, Event e = null) =>
-            CreateStateMachineAndExecuteAsync(null, type, name, e);
-
-        /// <summary>
-        /// Creates a new state machine of the specified <see cref="Type"/>, using the specified unbound
-        /// state machine id, and passes the specified optional <see cref="Event"/>. This event can only
-        /// be used to access its payload, and cannot be handled. The method returns only when
-        /// the state machine is initialized and the <see cref="Event"/> (if any)
-        /// is handled.
-        /// </summary>
-        public Task<StateMachineId> CreateStateMachineAndExecuteAsync(StateMachineId id, Type type, Event e = null)
-        {
-            Assert(id != null, "Cannot create an state machine using a null state machine id.");
-            return CreateStateMachineAndExecuteAsync(id, type, null, e);
-        }
-
+            
         /// <summary>
         /// Sends an asynchronous <see cref="Event"/> to a state machine.
         /// </summary>
@@ -448,65 +375,22 @@ namespace PChecker.SystematicTesting
             (ulong)Interlocked.Increment(ref OperationIdCounter) - 1;
 
         /// <summary>
-        /// Creates a new state machine of the specified <see cref="Type"/> and name, using the specified
-        /// unbound state machine id, and passes the specified optional <see cref="Event"/>. This event
-        /// can only be used to access its payload, and cannot be handled.
-        /// </summary>
-        internal StateMachineId CreateStateMachine(StateMachineId id, Type type, string name, Event initialEvent = null)
-        {
-            var creatorOp = Scheduler.GetExecutingOperation<StateMachineOperation>();
-            return CreateStateMachine(id, type, name, initialEvent, creatorOp?.StateMachine);
-        }
-
-        /// <summary>
         /// Creates a new <see cref="StateMachine"/> of the specified <see cref="Type"/>.
         /// </summary>
-        internal StateMachineId CreateStateMachine(StateMachineId id, Type type, string name, Event initialEvent, StateMachine creator)
+        internal StateMachineId CreateStateMachine(Type type, string name, Event initialEvent, StateMachine creator)
         {
             AssertExpectedCallerStateMachine(creator, "CreateStateMachine");
 
-            var stateMachine = CreateStateMachine(id, type, name, creator, initialEvent);
+            var stateMachine = CreateStateMachineInstance(type, name, creator, initialEvent);
             RunStateMachineEventHandler(stateMachine, true, null);
 
             return stateMachine.Id;
         }
 
         /// <summary>
-        /// Creates a new state machine of the specified <see cref="Type"/> and name, using the specified
-        /// unbound state machine id, and passes the specified optional <see cref="Event"/>. This event
-        /// can only be used to access its payload, and cannot be handled. The method returns only
-        /// when the state machine is initialized and the <see cref="Event"/> (if any) is handled.
-        /// </summary>
-        internal Task<StateMachineId> CreateStateMachineAndExecuteAsync(StateMachineId id, Type type, string name, Event initialEvent = null)
-        {
-            var creatorOp = Scheduler.GetExecutingOperation<StateMachineOperation>();
-            return CreateStateMachineAndExecuteAsync(id, type, name, initialEvent, creatorOp?.StateMachine);
-        }
-
-        /// <summary>
-        /// Creates a new <see cref="StateMachine"/> of the specified <see cref="Type"/>. The method
-        /// returns only when the state machine is initialized and the <see cref="Event"/> (if any)
-        /// is handled.
-        /// </summary>
-        internal async Task<StateMachineId> CreateStateMachineAndExecuteAsync(StateMachineId id, Type type, string name,
-            Event initialEvent, StateMachine creator)
-        {
-            AssertExpectedCallerStateMachine(creator, "CreateStateMachineAndExecuteAsync");
-            Assert(creator != null, "Only a state machine can call 'CreateStateMachineAndExecuteAsync': avoid calling " +
-                                    "it directly from the test method; instead call it through a test driver state machine.");
-
-            var stateMachine = CreateStateMachine(id, type, name, creator, initialEvent);
-            RunStateMachineEventHandler(stateMachine, true, creator);
-
-            // Wait until the state machine reaches quiescence.
-            await creator.ReceiveEventAsync(typeof(QuiescentEvent), rev => (rev as QuiescentEvent).StateMachineId == stateMachine.Id);
-            return await Task.FromResult(stateMachine.Id);
-        }
-
-        /// <summary>
         /// Creates a new state machine of the specified <see cref="Type"/>.
         /// </summary>
-        private StateMachine CreateStateMachine(StateMachineId id, Type type, string name, 
+        private StateMachine CreateStateMachineInstance(Type type, string name, 
             StateMachine creator, Event initialEvent)
         {
             Assert(type.IsSubclassOf(typeof(StateMachine)), "Type '{0}' is not a state machine.", type.FullName);
@@ -516,10 +400,8 @@ namespace PChecker.SystematicTesting
             Scheduler.ScheduleNextEnabledOperation(AsyncOperationType.Create);
             ResetProgramCounter(creator);
 
-            if (id is null)
-            {
-                id = new StateMachineId(type, name, creator, this);
-            }
+            MachineCreationPath path = MachineCreationPathFactory.NewPath(creator);
+            var id = new StateMachineId(type, name, path, this);
             
             var stateMachine = Create(type);
             IStateMachineManager stateMachineManager = new StateMachineManager(this, stateMachine);

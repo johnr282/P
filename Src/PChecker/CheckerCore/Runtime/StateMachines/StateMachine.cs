@@ -566,7 +566,7 @@ namespace PChecker.Runtime.StateMachines
         /// <param name="initialEvent">Optional initialization event.</param>
         /// <returns>The unique state machine id.</returns>
         protected StateMachineId CreateStateMachine(Type type, string name, Event initialEvent = null) =>
-            Runtime.CreateStateMachine(null, type, name, initialEvent, this);
+            Runtime.CreateStateMachine(type, name, initialEvent, this);
         
         
         /// <summary>
