@@ -35,15 +35,17 @@ namespace PChecker.SystematicTesting.Operations
     /// </summary>
     internal sealed class SendEffect : ExecutionEffect
     {
+        // Snapshot captured at send time, independent of subsequent receiver execution.
         internal Event SentEvent { get; }
         internal StateMachineId TargetStateMachineId { get; }
 
-        internal SendEffect(StateMachineId stateMachineId, 
+        internal SendEffect(
+            StateMachineId stateMachineId, 
             Event sentEvent, 
             StateMachineId targetStateMachineId)
             : base(stateMachineId)
         {
-            SentEvent = sentEvent;
+            SentEvent = sentEvent?.Snapshot();
             TargetStateMachineId = targetStateMachineId;
         }
     }
@@ -53,13 +55,15 @@ namespace PChecker.SystematicTesting.Operations
     /// </summary>
     internal sealed class AnnounceEffect : ExecutionEffect
     { 
+        // Snapshot captured before monitors execute on the live announcement.
         internal Event AnnouncedEvent { get; }
 
-        internal AnnounceEffect(StateMachineId stateMachineId, 
+        internal AnnounceEffect(
+            StateMachineId stateMachineId, 
             Event announcedEvent)
             : base(stateMachineId)
         {
-            AnnouncedEvent = announcedEvent;
+            AnnouncedEvent = announcedEvent?.Snapshot();
         }
     }
 
@@ -68,13 +72,24 @@ namespace PChecker.SystematicTesting.Operations
     /// </summary>
     internal sealed class CreateEffect : ExecutionEffect
     {
+        // Not used for behavior equality; identical machine creations can have
+        // different IDs across different runs. 
         internal StateMachineId CreatedStateMachineId { get; }
+        internal Type CreatedStateMachineType { get; }
+        internal string CreatedStateMachineName { get; }
+        internal Event InitialEvent { get; }
 
         internal CreateEffect(StateMachineId stateMachineId, 
-            StateMachineId createdStateMachineId)
+            StateMachineId createdStateMachineId,
+            Type createdStateMachineType,
+            string createdStateMachineName,
+            Event initialEvent)
             : base(stateMachineId)
         {
             CreatedStateMachineId = createdStateMachineId;
+            CreatedStateMachineType = createdStateMachineType;
+            CreatedStateMachineName = createdStateMachineName;
+            InitialEvent = initialEvent?.Snapshot();
         }
     }
 }

@@ -5,6 +5,8 @@ using NUnit.Framework;
 using PChecker.Configuration;
 using PChecker.Random;
 using PChecker.Runtime.Events;
+using PChecker.Runtime.StateMachines;
+using PChecker.Runtime.Values;
 using PChecker.Exceptions;
 using ControlledRuntime = PChecker.SystematicTesting.ControlledRuntime;
 using PChecker.SystematicTesting.Operations;
@@ -39,10 +41,11 @@ public class ExecutionEffectNotificationTests
 
         Assert.That(callbackInvoked, Is.True);
         Assert.That(strategy.Observations, Has.Count.EqualTo(1));
-        Assert.That(strategy.Observations[0].Choice, Is.SameAs(choice));
+        Assert.That(strategy.Observations[0].Choice, Is.Not.SameAs(choice));
+        Assert.That(strategy.Observations[0].Choice.Operation, Is.SameAs(choice.Operation));
         Assert.That(strategy.Observations[0].Effects, Has.Count.EqualTo(1));
         Assert.That(((AnnounceEffect)strategy.Observations[0].Effects[0]).AnnouncedEvent,
-            Is.SameAs(announcedEvent));
+            Is.TypeOf<FailureEvent>().And.Not.SameAs(announcedEvent));
         Assert.That(runtime.Scheduler.WaitAsync().IsCompleted, Is.True);
         Assert.That(runtime.GetAndClearEffects(), Is.Empty);
     }
@@ -105,6 +108,42 @@ public class ExecutionEffectNotificationTests
 
     public sealed class FailureEvent : Event { }
 
+    [Test]
+    public async Task InitializationObservationKeepsPayloadFromBeforeHandlerExecution()
+    {
+        await Task.Run(async () =>
+        {
+            var configuration = CheckerConfiguration.Create();
+            var strategy = new RecordingStrategy(configuration, 100);
+            using var runtime = new ControlledRuntime(configuration, strategy);
+            var payload = new PSeq(new IPValue[] { new PInt(1) });
+            var initialEvent = new Event(payload);
+            runtime.RunTest((Action<ControlledRuntime>)(r =>
+                r.CreateStateMachine(typeof(MutatingMachine), "MutatingMachine", initialEvent)), "snapshot");
+            await runtime.WaitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+            var observation = strategy.Observations.Find(o => o.Choice is InitializeChoice);
+            Assert.That(observation.Choice, Is.Not.Null, runtime.Scheduler.BugReport);
+            var snapshot = ((InitializeChoice)observation.Choice).InitialEvent;
+            Assert.That(snapshot, Is.Not.SameAs(initialEvent));
+            Assert.That(((PSeq)snapshot.Payload).Count, Is.EqualTo(1));
+            Assert.That(payload.Count, Is.EqualTo(2), "The handler must still receive the live event.");
+        });
+    }
+
+    public sealed class MutatingMachine : StateMachine
+    {
+        [Start]
+        [OnEntry(nameof(Mutate))]
+        private sealed class Initial : State { }
+
+        private void Mutate(Event e)
+        {
+            ((PSeq)e.Payload).Add(new PInt(2));
+            Runtime.Assert(false, "Expected failure after mutation");
+        }
+    }
+
     public sealed class FailingMonitor : Monitor
     {
         [Start]
@@ -121,8 +160,8 @@ public class ExecutionEffectNotificationTests
         internal readonly List<(SchedulingChoice Choice, IReadOnlyList<ExecutionEffect> Effects)>
             Observations = new();
 
-        internal RecordingStrategy(CheckerConfiguration configuration)
-            : base(1, new RandomValueGenerator(configuration)) { }
+        internal RecordingStrategy(CheckerConfiguration configuration, int maxSteps = 1)
+            : base(maxSteps, new RandomValueGenerator(configuration)) { }
 
         internal void ReachBound() => ScheduledSteps = 1;
 

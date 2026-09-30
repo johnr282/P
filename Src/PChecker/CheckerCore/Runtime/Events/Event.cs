@@ -23,6 +23,18 @@ namespace PChecker.Runtime.Events
         }
         
         public IPValue Payload { get; set; }
+
+        /// <summary>
+        /// Captures an event for behavior observation without changing the live event.
+        /// Unlike generated Clone implementations, this preserves the payload as well
+        /// as the concrete event type. Other event metadata is retained by reference.
+        /// </summary>
+        internal Event Snapshot()
+        {
+            var snapshot = (Event)MemberwiseClone();
+            snapshot.Payload = Payload?.Clone();
+            return snapshot;
+        }
         
         public bool Equals(IPValue other)
         {

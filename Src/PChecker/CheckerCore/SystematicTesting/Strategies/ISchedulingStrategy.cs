@@ -81,7 +81,8 @@ namespace PChecker.SystematicTesting.Strategies
         /// from its last scheduling choice.
         /// </summary>
         /// <param name="lastChoice">
-        /// The last scheduling choice returned by the strategy.
+        /// An observation snapshot of the last scheduling choice, with event
+        /// payloads copied before execution. It is not the live choice object.
         /// </param>
         /// <param name="effects">Effects in order of execution. </param>
         void NotifyEffects(

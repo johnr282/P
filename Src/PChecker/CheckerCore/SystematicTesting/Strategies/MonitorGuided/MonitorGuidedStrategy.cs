@@ -21,7 +21,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private MonitorAnalyzer _monitorAnalyzer;
 
         private readonly Dictionary<StateMachineId, List<SchedulingChoice>> 
-            _localTraces = new();
+            _machineTraces = new();
+
+        private readonly Dictionary<StateMachineId, BehaviorStore> _behaviorStores = new();
 
         public MonitorGuidedStrategy()
         {
@@ -110,6 +112,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         {
             _monitor = null;
             _monitorAnalyzer = null;
+            _machineTraces.Clear();
             return true;
         }
 
@@ -148,7 +151,50 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             SchedulingChoice lastChoice,
             IReadOnlyList<ExecutionEffect> effects)
         {
-            // JR TODO
+            if (!GetStateMachineIdFromChoice(lastChoice, out var machineId))
+            {
+                return;
+            }
+
+            if (!_behaviorStores.TryGetValue(machineId, out var behaviorStore))
+            {
+                behaviorStore = new BehaviorStore();
+                _behaviorStores[machineId] = behaviorStore;
+            }
+
+            if (!_machineTraces.TryGetValue(machineId, out var machineTrace))
+            {
+                machineTrace = new();
+                _machineTraces[machineId] = machineTrace;
+            }
+
+            behaviorStore.AddBehavior(machineTrace, lastChoice, effects);
+            machineTrace.Add(lastChoice);
+        }
+
+        /// <summary>
+        /// Retrieves the ID of the state machine corresponding to choice.
+        /// </summary>
+        /// <returns>
+        /// True if choice has a corresponding machine and an ID was retrieved, 
+        /// false otherwise.
+        /// </returns>
+        private static bool GetStateMachineIdFromChoice(
+            SchedulingChoice choice, 
+            out StateMachineId id)
+        {
+            var op = choice.Operation;
+            switch (op)
+            {
+                case StateMachineOperation machineOp:
+                    id = machineOp.StateMachine.Id;
+                    return true;
+
+                case TaskOperation:
+                default:
+                    id = null;
+                    return false;
+            }
         }
     }
 }

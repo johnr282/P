@@ -21,6 +21,11 @@ namespace PChecker.Runtime.StateMachines
         public readonly ulong Value;
 
         /// <summary>
+        /// Used to reference machines across runs for behavior recording.
+        /// </summary>
+        public readonly MachineCreationPath CreationPath;
+
+        /// <summary>
         /// Unique id, when non-empty.
         /// </summary>
         [DataMember]
@@ -45,9 +50,12 @@ namespace PChecker.Runtime.StateMachines
 
         /// <summary>
         /// Initializes a new instance of the <see cref="StateMachineId"/> class.
+        /// If no creator exists, pass null.
         /// </summary>
-        internal StateMachineId(Type type, string name, ControlledRuntime runtime, bool useNameForHashing = false)
+        internal StateMachineId(Type type, string name, MachineCreationPath path, 
+            ControlledRuntime runtime, bool useNameForHashing = false)
         {
+            CreationPath = path;
 
             if (useNameForHashing)
             {

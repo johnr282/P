@@ -78,6 +78,11 @@ namespace PChecker.SystematicTesting
         private bool HasPendingObservation;
 
         /// <summary>
+        /// Inputs of the pending observation, captured before executing the live choice.
+        /// </summary>
+        private SchedulingChoice PendingObservationChoice;
+
+        /// <summary>
         /// The currently scheduled asynchronous operation.
         /// </summary>
         internal AsyncOperation ScheduledOperation => LastSchedulingChoice.Operation;
@@ -184,6 +189,7 @@ namespace PChecker.SystematicTesting
             }
 
             LastSchedulingChoice = nextChoice;
+            PendingObservationChoice = nextChoice.Snapshot();
             HasPendingObservation = true;
             HandleEventDeliveryChoice(nextChoice);
 
@@ -450,6 +456,7 @@ namespace PChecker.SystematicTesting
                 // Create an initial scheduling choice; first registered operation should
                 // always be a TaskOperation corresponding to the initial test task.
                 LastSchedulingChoice = new RunTaskChoice((TaskOperation)op);
+                PendingObservationChoice = LastSchedulingChoice.Snapshot();
                 HasPendingObservation = true;
             }
 
@@ -827,8 +834,10 @@ namespace PChecker.SystematicTesting
             }
 
             HasPendingObservation = false;
+            var observedChoice = PendingObservationChoice;
+            PendingObservationChoice = null;
             var effects = Runtime.GetAndClearEffects();
-            Strategy.NotifyEffects(LastSchedulingChoice, effects);
+            Strategy.NotifyEffects(observedChoice, effects);
         }
 
         /// <summary>

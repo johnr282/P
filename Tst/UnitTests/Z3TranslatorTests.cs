@@ -268,8 +268,8 @@ namespace UnitTests
         [Test]
         public void MachinesAndInterfacesUseMachineIdentity()
         {
-            var id = new StateMachineId(typeof(Z3TranslatorTests), "one", null, useNameForHashing: true);
-            var otherId = new StateMachineId(typeof(Z3TranslatorTests), "two", null, useNameForHashing: true);
+            var id = new StateMachineId(typeof(Z3TranslatorTests), "one", null, null, useNameForHashing: true);
+            var otherId = new StateMachineId(typeof(Z3TranslatorTests), "two", null, null, useNameForHashing: true);
             var first = new PMachineValue(id, new List<string> { "event" });
             var second = new PMachineValue(id, new List<string>());
             var permission = new PermissionType(new NamedEventSet("Interface", new PParser.EventSetDeclContext(null, 0)));

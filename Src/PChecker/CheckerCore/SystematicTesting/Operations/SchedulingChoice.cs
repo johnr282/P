@@ -24,6 +24,36 @@ namespace PChecker.SystematicTesting.Operations
         {
             Operation = operation;
         }
+
+        /// <summary>
+        /// Captures inputs before execution can mutate them. The result is for
+        /// observation only: delivery must continue to use the original choice.
+        /// Operation identity and event provenance are shared; payloads are copied.
+        /// </summary>
+        internal SchedulingChoice Snapshot() => this switch
+        {
+            InitializeChoice c => 
+                new InitializeChoice(c.Operation, c.InitialEvent?.Snapshot()),
+            ResumeInitializationChoice c =>
+                new ResumeInitializationChoice(c.Operation, c.InitialEvent?.Snapshot()),
+            DeliverEventChoice c => 
+                new DeliverEventChoice(c.Operation, SnapshotEventWithMetadata(c.EventToDeliver)),
+            ResumeHandlerChoice c => 
+                new ResumeHandlerChoice(c.Operation, SnapshotEventWithMetadata(c.EventToResume)),
+            CompleteReceiveChoice c => new CompleteReceiveChoice(
+                c.Operation,
+                SnapshotEventWithMetadata(c.EventToResume), 
+                SnapshotEventWithMetadata(c.EventToDeliver), 
+                c.InInitialization),
+            RunTaskChoice c => new RunTaskChoice(c.Operation),
+
+            _ => throw new NotSupportedException(
+                $"Unsupported scheduling choice: {GetType()}")
+        };
+
+        private static (Event e, EventInfo info) SnapshotEventWithMetadata(
+            (Event e, EventInfo info) input) =>
+            (input.e?.Snapshot(), input.info);
     }
 
     /// <inheritdoc/>

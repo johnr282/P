@@ -86,6 +86,8 @@ namespace PChecker.SystematicTesting
         /// </summary>
         private long OperationIdCounter;
 
+        private MachineCreationPathFactory MachineCreationPathFactory = new();
+
         /// <summary>
         /// Records if the runtime is running.
         /// </summary>
@@ -274,7 +276,7 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// Creates a fresh state machine id that has not yet been bound to any state machine.
         /// </summary>
-        public StateMachineId CreateStateMachineId(Type type, string name = null) => new StateMachineId(type, name, this);
+        public StateMachineId CreateStateMachineId(Type type, StateMachine creator, string name = null) => new StateMachineId(type, name, creator, this);
 
         /// <summary>
         /// Creates an state machine id that is uniquely tied to the specified unique name. The
@@ -282,12 +284,19 @@ namespace PChecker.SystematicTesting
         /// it can be bound to a previously created state machine. In the second case, this state machine
         /// id can be directly used to communicate with the corresponding state machine.
         /// </summary>
-        public StateMachineId CreateStateMachineIdFromName(Type type, string name)
+        public StateMachineId CreateStateMachineIdFromName(Type type, StateMachine creator, string name)
         {
             // It is important that all state machine ids use the monotonically incrementing
             // value as the id during testing, and not the unique name.
-            var id = new StateMachineId(type, name, this);
-            return NameValueToStateMachineId.GetOrAdd(name, id);
+            if (!NameValueToStateMachineId.TryGetValue(name, out var id))
+            {
+                // Creating a StateMachineId advances the creation counter, so only
+                // do so if an id doesn't already exist
+                id = new StateMachineId(type, name, creator, this);
+                NameValueToStateMachineId[name] = id;
+            }
+
+            return id;
         }
 
         /// <summary>
@@ -509,7 +518,7 @@ namespace PChecker.SystematicTesting
 
             if (id is null)
             {
-                id = new StateMachineId(type, name, this);
+                id = new StateMachineId(type, name, creator, this);
             }
             
             var stateMachine = Create(type);
@@ -531,7 +540,7 @@ namespace PChecker.SystematicTesting
             LogWriter.LogCreateStateMachine(id, creator?.Id.Name, creator?.Id.Type);
 
             EffectsSinceLastSchedulingChoice.Add(
-                new CreateEffect(creator?.Id, stateMachine.Id));
+                new CreateEffect(creator?.Id, stateMachine.Id, type, name, initialEvent));
 
             return stateMachine;
         }
