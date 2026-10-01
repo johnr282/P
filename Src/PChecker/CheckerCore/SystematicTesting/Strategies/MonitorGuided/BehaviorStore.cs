@@ -208,7 +208,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             public int GetHashCode(IPValue value) => PValueHash(value);
         }
 
-        // Compare payloads using custom comparison for machine references
+        // Compare machine references by creation path. Collection enumeration order
+        // is part of behavior identity: handlers can observe it through iteration
+        // and map keys/values even when ordinary P value equality ignores it.
         private static bool SamePValue(IPValue x, IPValue y)
         {
             if (ReferenceEquals(x, y)) return true;
@@ -223,9 +225,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                     a.fieldNames.SequenceEqual(b.fieldNames, StringComparer.Ordinal) &&
                     a.fieldValues.SequenceEqual(b.fieldValues, PayloadEquality),
                 (PSeq a, PSeq b) => a.SequenceEqual(b, PayloadEquality),
-                (PSet a, PSet b) => 
-                    a.Count == b.Count &&
-                    new HashSet<IPValue>(a, PayloadEquality).SetEquals(b),
+                (PSet a, PSet b) => a.SequenceEqual(b, PayloadEquality),
                 (PMap a, PMap b) => SameMap(a, b),
                 (Event a, Event b) => SameEvent(a, b),
                 // Primitive and foreign values retain their own value semantics.
@@ -236,11 +236,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private static bool SameMap(PMap x, PMap y)
         {
             if (x.Count != y.Count) return false;
-            var entries = new Dictionary<IPValue, IPValue>(PayloadEquality);
-            foreach (var entry in y) entries.Add(entry.Key, entry.Value);
-            return x.All(entry => 
-                entries.TryGetValue(entry.Key, out var value) &&
-                SamePValue(entry.Value, value));
+            return x.Zip(y, (a, b) =>
+                SamePValue(a.Key, b.Key) && SamePValue(a.Value, b.Value)).All(equal => equal);
         }
 
         private static int PValueHash(IPValue value) => value switch
@@ -251,9 +248,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             PNamedTuple tuple => HashCode.Combine(
                 OrderedHash(tuple.fieldValues), NamedFieldsHash(tuple.fieldNames)),
             PSeq sequence => OrderedHash(sequence),
-            PSet set => UnorderedHash(set.Select(PValueHash)),
-            PMap map => UnorderedHash(map.Select(entry =>
-                HashCode.Combine(PValueHash(entry.Key), PValueHash(entry.Value)))),
+            PSet set => OrderedHash(set),
+            PMap map => MapHash(map),
             Event e => EventHash(e),
             _ => value.GetHashCode()
         };
@@ -272,15 +268,15 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             return hash.ToHashCode();
         }
 
-        private static int UnorderedHash(IEnumerable<int> hashes)
+        private static int MapHash(PMap map)
         {
-            int sum = 0, count = 0;
-            foreach (var hash in hashes)
+            var hash = new HashCode();
+            foreach (var entry in map)
             {
-                sum = unchecked(sum + hash);
-                count++;
+                hash.Add(PValueHash(entry.Key));
+                hash.Add(PValueHash(entry.Value));
             }
-            return HashCode.Combine(count, sum);
+            return hash.ToHashCode();
         }
 
         // Compare events using both type and payload rather than Event.Equals,

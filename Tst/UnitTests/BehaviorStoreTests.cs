@@ -299,7 +299,7 @@ public class BehaviorStoreTests
         var receiver2 = Operation(secondRuntime, path: Path(0));
         PMachineValue Reference(StateMachineId id) => new(id, new List<string>());
         var firstEvent = new Event(WrapReferences(kind, Reference(a1), Reference(b1), false));
-        var secondEvent = new Event(WrapReferences(kind, Reference(a2), Reference(b2), true));
+        var secondEvent = new Event(WrapReferences(kind, Reference(a2), Reference(b2), false));
         var first = new InitializeChoice(receiver1, firstEvent);
         var second = new InitializeChoice(receiver2, secondEvent);
         var comparer = BehaviorStoreComparers.ChoiceEquality;
@@ -316,9 +316,103 @@ public class BehaviorStoreTests
         Assert.That(BehaviorStoreComparers.EffectEquality.GetHashCode(effects[0]),
             Is.EqualTo(BehaviorStoreComparers.EffectEquality.GetHashCode(matchingEffects[0])));
 
+        if (kind is 4 or 5)
+        {
+            var reorderedEvent = new Event(WrapReferences(kind, Reference(a2), Reference(b2), true));
+            var reorderedChoice = new InitializeChoice(receiver2, reorderedEvent);
+            Assert.That(comparer.Equals(first, reorderedChoice), Is.False);
+            Assert.That(store.GetBehavior(new List<SchedulingChoice> { reorderedChoice }, out _, out _), Is.False);
+            Assert.That(BehaviorStoreComparers.EffectEquality.Equals(effects[0],
+                new SendEffect(receiver2.StateMachine.Id, reorderedEvent, a2)), Is.False);
+        }
+
         var c2 = Operation(secondRuntime, path: Path(0, 2)).StateMachine.Id;
         var wrongEvent = new Event(WrapReferences(kind, Reference(b2), Reference(c2), true));
         Assert.That(comparer.Equals(first, new InitializeChoice(receiver2, wrongEvent)), Is.False);
+    }
+
+    private static IPValue CollectionPayload(bool map, params int[] order)
+    {
+        var values = order.Select(value => (IPValue)new PInt(value));
+        return map
+            ? new PMap(values.ToDictionary(value => value, value => value))
+            : new PSet(new HashSet<IPValue>(values));
+    }
+
+    [TestCase(0)] // Set
+    [TestCase(1)] // Map
+    [TestCase(2)] // Set nested in a tuple
+    [TestCase(3)] // Set used as a map key
+    [TestCase(4)] // Map used as a map value
+    public void ObservableCollectionOrderDistinguishesChoicesAndEffects(int kind)
+    {
+        using var runtime = NewRuntime();
+        var op = Operation(runtime);
+        IPValue Payload(params int[] order) => kind switch
+        {
+            0 => CollectionPayload(false, order),
+            1 => CollectionPayload(true, order),
+            2 => new PTuple(CollectionPayload(false, order)),
+            3 => new PMap(new Dictionary<IPValue, IPValue>
+                { [CollectionPayload(false, order)] = new PInt(0) }),
+            _ => new PMap(new Dictionary<IPValue, IPValue>
+                { [new PInt(0)] = CollectionPayload(true, order) })
+        };
+        SchedulingChoice Input(params int[] order) =>
+            new InitializeChoice(op, new Event(Payload(order))).Snapshot();
+        ExecutionEffect Effect(params int[] order) =>
+            new AnnounceEffect(op.StateMachine.Id, new Event(Payload(order)));
+
+        var forward = Input(1, 2);
+        var reverse = Input(2, 1);
+        var forwardEffect = Effect(1, 2);
+        var reverseEffect = Effect(2, 1);
+        Assert.That(BehaviorStoreComparers.ChoiceEquality.Equals(forward, reverse), Is.False);
+        Assert.That(BehaviorStoreComparers.EffectEquality.Equals(forwardEffect, reverseEffect), Is.False);
+
+        var store = new BehaviorStore();
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), forward, new[] { forwardEffect }, true);
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { reverse }, out _, out _), Is.False);
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), reverse, new[] { reverseEffect }, true);
+
+        foreach (var order in new[] { new[] { 1, 2 }, new[] { 2, 1 } })
+        {
+            Assert.That(store.GetBehavior(new List<SchedulingChoice> { Input(order) },
+                out var effects, out var complete), Is.True);
+            Assert.That(complete, Is.True);
+            Assert.That(effects, Has.Count.EqualTo(1));
+            Assert.That(BehaviorStoreComparers.EffectEquality.Equals(effects[0], Effect(order)), Is.True);
+            Assert.That(BehaviorStoreComparers.EffectEquality.GetHashCode(effects[0]),
+                Is.EqualTo(BehaviorStoreComparers.EffectEquality.GetHashCode(Effect(order))));
+        }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void CollectionHashesReflectIterationOrder(bool map)
+    {
+        using var runtime = NewRuntime();
+        var op = Operation(runtime);
+        var choiceHashes = new HashSet<int>();
+        var effectHashes = new HashSet<int>();
+        var permutations = new[]
+        {
+            new[] { 1, 2, 3 }, new[] { 1, 3, 2 }, new[] { 2, 1, 3 },
+            new[] { 2, 3, 1 }, new[] { 3, 1, 2 }, new[] { 3, 2, 1 }
+        };
+        foreach (var order in permutations)
+        {
+            var e = new Event(CollectionPayload(map, order));
+            var choice = new InitializeChoice(op, e);
+            var effect = new AnnounceEffect(op.StateMachine.Id, e);
+            choiceHashes.Add(BehaviorStoreComparers.ChoiceEquality.GetHashCode(choice));
+            effectHashes.Add(BehaviorStoreComparers.EffectEquality.GetHashCode(effect));
+        }
+
+        // Hash collisions are allowed, but all permutations must not systematically
+        // collapse to one hash as they did with the unordered sum.
+        Assert.That(choiceHashes.Count, Is.GreaterThan(1));
+        Assert.That(effectHashes.Count, Is.GreaterThan(1));
     }
 
     [Test]
