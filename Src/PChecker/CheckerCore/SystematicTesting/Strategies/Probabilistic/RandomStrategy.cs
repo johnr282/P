@@ -111,7 +111,8 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         /// <inheritdoc/>
         public virtual void NotifyEffects(
             SchedulingChoice lastChoice,
-            IReadOnlyList<ExecutionEffect> effects) 
+            IReadOnlyList<ExecutionEffect> effects,
+            bool completeBehavior) 
         { 
             // Intentionally empty
         }

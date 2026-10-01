@@ -21,13 +21,23 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 = new(BehaviorStoreComparers.ChoiceEquality);
             public IReadOnlyList<ExecutionEffect> Effects { get; }
 
-            public BehaviorNode(IReadOnlyList<ExecutionEffect> effects)
+            /// <summary>
+            /// True if this node represents a complete, uninterrupted behavior. 
+            /// False otherwise.
+            /// </summary>
+            public bool CompleteBehavior { get; }
+
+            public BehaviorNode(
+                IReadOnlyList<ExecutionEffect> effects, 
+                bool completeBehavior)
             {
                 Effects = effects;
+                CompleteBehavior = completeBehavior;
             }
 
             /// <summary>
-            /// Adds a new behavior to this node. 
+            /// Adds a new behavior to this node if the new behavior is consistent
+            /// with existing behavior. 
             /// </summary>
             /// <returns>
             /// False if a transition already exists for the given choice but the 
@@ -35,20 +45,81 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             /// </returns>
             public bool AddBehavior(
                 SchedulingChoice choice,
-                IReadOnlyList<ExecutionEffect> effects)
+                IReadOnlyList<ExecutionEffect> effects, 
+                bool completeBehavior)
             {
                 if (!Transitions.TryGetValue(choice, out var nextNode))
                 {
-                    Transitions[choice] = new BehaviorNode(effects);
+                    Transitions[choice] = new BehaviorNode(effects, completeBehavior);
                     return true;
                 }
 
-                return nextNode.Effects.SequenceEqual(effects, 
-                    BehaviorStoreComparers.EffectEquality);
+                if (nextNode.CompleteBehavior)
+                {
+                    if (completeBehavior)
+                    {
+                        // Existing and new behaviors are both complete, so they 
+                        // should match exactly
+                        return nextNode.Effects.SequenceEqual(effects,
+                            BehaviorStoreComparers.EffectEquality);
+                    }
+
+                    // New incomplete behavior should be a prefix of existing
+                    // complete behavior
+                    return PrefixOf(effects, nextNode.Effects);
+                }
+
+                // Existing behavior is incomplete; replace it only if new behavior
+                // is more complete
+                if (completeBehavior)
+                {
+                    // Replace existing incomplete behavior with new complete 
+                    // behavior; existing should be a prefix of new
+                    if (PrefixOf(nextNode.Effects, effects))
+                    {
+                        Transitions[choice] = new BehaviorNode(effects, true);
+                        return true;
+                    }
+                    return false;
+                }
+
+                // Both are incomplete; shorter behavior should be a prefix of
+                // the longer. Store the longer behavior if they are consistent.
+                IReadOnlyList<ExecutionEffect> shorter, longer;
+                if (nextNode.Effects.Count >= effects.Count)
+                {
+                    shorter = effects;
+                    longer = nextNode.Effects;
+                }
+                else
+                {
+                    shorter = nextNode.Effects;
+                    longer = effects;
+                }
+
+                if (PrefixOf(shorter, longer))
+                {
+                    Transitions[choice] = new BehaviorNode(longer, false);
+                    return true;
+                }
+                return false;
+            }
+
+            /// <summary>
+            /// Returns whether prefix is a prefix of effects.
+            /// </summary>
+            private static bool PrefixOf(
+                IReadOnlyList<ExecutionEffect> prefix, 
+                IReadOnlyList<ExecutionEffect> effects)
+            {
+                return effects.Count >= prefix.Count &&
+                    effects.Take(prefix.Count).SequenceEqual(
+                        prefix,
+                        BehaviorStoreComparers.EffectEquality);
             }
         }
 
-        private BehaviorNode _root = new(new List<ExecutionEffect>());
+        private BehaviorNode _root = new(new List<ExecutionEffect>(), true);
 
         /// <summary>
         /// Adds the given behavior to the store. The behavior represents the 
@@ -56,10 +127,19 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// machine i with previous choices trace executes newChoice, it produces 
         /// effects.
         /// </summary>
+        /// <param name="trace">Local trace of machine i.</param>
+        /// <param name="newChoice">Most recent choice executed on machine i.</param>
+        /// <param name="effects">Effects produced after execution of newChoice.</param>
+        /// <param name="completeBehavior">
+        /// True if this is a complete behavior, meaning machine i finished its
+        /// scheduled execution without interruption. False otherwise.
+        /// </param>
+        /// <exception cref="PInternalException"></exception>
         public void AddBehavior(
             IReadOnlyList<SchedulingChoice> trace,
             SchedulingChoice newChoice,
-            IReadOnlyList<ExecutionEffect> effects)
+            IReadOnlyList<ExecutionEffect> effects, 
+            bool completeBehavior)
         {
             var current = _root;
 
@@ -77,7 +157,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 current = nextNode;
             }
 
-            if (!current.AddBehavior(newChoice, effects))
+            
+
+            if (!current.AddBehavior(newChoice, effects, completeBehavior))
             {
                 throw new PInternalException(
                     $"Inconsistent behavior for choice {newChoice} in trace " +
@@ -92,9 +174,11 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// <returns>True if behavior was found, false if not.</returns>
         public bool GetBehavior(
             List<SchedulingChoice> trace, 
-            out IReadOnlyList<ExecutionEffect> effects)
+            out IReadOnlyList<ExecutionEffect> effects, 
+            out bool completeBehavior)
         {
             effects = new List<ExecutionEffect>();
+            completeBehavior = false;
             var current = _root;
 
             foreach (var choice in trace)
@@ -107,6 +191,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             }
 
             effects = current.Effects;
+            completeBehavior = current.CompleteBehavior;
             return true;
         }
     }

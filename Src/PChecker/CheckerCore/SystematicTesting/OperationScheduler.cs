@@ -790,7 +790,7 @@ namespace PChecker.SystematicTesting
             if (killTasks || cancelExecution)
             {
                 // Preserve the failing segment before invoking external failure callbacks.
-                FlushExecutionEffects();
+                FlushExecutionEffects(true);
             }
 
             if (!BugFound)
@@ -826,7 +826,11 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// Reports the current execution segment exactly once, even if it produced no effects.
         /// </summary>
-        private void FlushExecutionEffects()
+        /// <param name="executionInterrupted">
+        /// True if this method is called due to the scheduled machine's execution
+        /// being interrupted, false if called due to a normal scheduler call.
+        /// </param>
+        private void FlushExecutionEffects(bool executionInterrupted = false)
         {
             if (!HasPendingObservation)
             {
@@ -837,7 +841,7 @@ namespace PChecker.SystematicTesting
             var observedChoice = PendingObservationChoice;
             PendingObservationChoice = null;
             var effects = Runtime.GetAndClearEffects();
-            Strategy.NotifyEffects(observedChoice, effects);
+            Strategy.NotifyEffects(observedChoice, effects, !executionInterrupted);
         }
 
         /// <summary>
@@ -846,7 +850,7 @@ namespace PChecker.SystematicTesting
         private void Stop()
         {
             IsRunning = false;
-            FlushExecutionEffects();
+            FlushExecutionEffects(true);
             KillRemainingOperations();
 
             // Check if the completion source is completed. If not synchronize on

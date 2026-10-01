@@ -85,8 +85,17 @@ namespace PChecker.SystematicTesting.Strategies
         /// payloads copied before execution. It is not the live choice object.
         /// </param>
         /// <param name="effects">Effects in order of execution. </param>
+        /// <param name="completeBehavior">
+        /// True if this is a complete behavior, meaning the last scheduled 
+        /// machine has finished its current execution and the scheduler is 
+        /// about to make a new scheduling choice. 
+        /// False otherwise, meaning execution was interrupted before the 
+        /// scheduled machine could finish due to an assertion failure or other
+        /// exception.
+        /// </param>
         void NotifyEffects(
             SchedulingChoice lastChoice, 
-            IReadOnlyList<ExecutionEffect> effects);
+            IReadOnlyList<ExecutionEffect> effects,
+            bool completeBehavior);
     }
 }

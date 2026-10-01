@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using NUnit.Framework;
 using PChecker.Configuration;
 using PChecker.Random;
 using PChecker.Runtime.Events;
+using PChecker.Runtime.Exceptions;
 using PChecker.Runtime.StateMachines;
 using PChecker.Runtime.Values;
 using PChecker.SystematicTesting.Operations;
@@ -64,12 +66,13 @@ public class BehaviorStoreTests
         var second = Choice(kind, Operation(secondRuntime));
         var store = new BehaviorStore();
         var effects = new ExecutionEffect[] { new AnnounceEffect(null, new Event(new PInt(7))) };
-        store.AddBehavior(Array.Empty<SchedulingChoice>(), first, effects);
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), first, effects, true);
 
-        Assert.That(store.GetBehavior(new List<SchedulingChoice> { second }, out var result), Is.True);
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { second }, out var result, out var complete), Is.True);
+        Assert.That(complete, Is.True);
         Assert.That(result, Is.SameAs(effects));
         Assert.DoesNotThrow(() => store.AddBehavior(Array.Empty<SchedulingChoice>(), second,
-            new ExecutionEffect[] { new AnnounceEffect(null, new Event(new PInt(7))) }));
+            new ExecutionEffect[] { new AnnounceEffect(null, new Event(new PInt(7))) }, true));
     }
 
     [Test]
@@ -78,8 +81,8 @@ public class BehaviorStoreTests
         using var runtime = NewRuntime();
         using var otherRuntime = NewRuntime();
         var op = Operation(runtime);
-        var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>());
-        node.AddBehavior(Choice(4, op), Array.Empty<ExecutionEffect>());
+        var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>(), true);
+        node.AddBehavior(Choice(4, op), Array.Empty<ExecutionEffect>(), true);
         Assert.That(node.Transitions.ContainsKey(Choice(4, op, payload: 9)), Is.False);
         Assert.That(node.Transitions.ContainsKey(Choice(4, op, receivedPayload: 9)), Is.False);
         Assert.That(node.Transitions.ContainsKey(Choice(4, op, initializing: true)), Is.False);
@@ -97,22 +100,22 @@ public class BehaviorStoreTests
         var sender = op.StateMachine.Id;
         var target = Operation(runtime).StateMachine.Id;
         var choice = Choice(0, op);
-        var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>());
+        var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>(), true);
         ExecutionEffect[] Effects(int payload) => new ExecutionEffect[]
         {
             new SendEffect(sender, new Event(new PInt(payload)), target),
             new AnnounceEffect(sender, new Event(new PInt(3))),
             new CreateEffect(sender, target, null)
         };
-        Assert.That(node.AddBehavior(choice, Effects(2)), Is.True);
-        Assert.That(node.AddBehavior(Choice(0, op), Effects(2)), Is.True);
-        Assert.That(node.AddBehavior(choice, Effects(4)), Is.False);
+        Assert.That(node.AddBehavior(choice, Effects(2), true), Is.True);
+        Assert.That(node.AddBehavior(Choice(0, op), Effects(2), true), Is.True);
+        Assert.That(node.AddBehavior(choice, Effects(4), true), Is.False);
         var changed = Effects(2);
         changed[0] = new SendEffect(sender, new Event(new PInt(2)), sender);
-        Assert.That(node.AddBehavior(choice, changed), Is.False);
+        Assert.That(node.AddBehavior(choice, changed, true), Is.False);
         changed = Effects(2);
         Array.Reverse(changed);
-        Assert.That(node.AddBehavior(choice, changed), Is.False);
+        Assert.That(node.AddBehavior(choice, changed, true), Is.False);
     }
 
     [Test]
@@ -120,8 +123,8 @@ public class BehaviorStoreTests
     {
         using var runtime = NewRuntime();
         var op = Operation(runtime);
-        var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>());
-        node.AddBehavior(new InitializeChoice(op, new Event()), Array.Empty<ExecutionEffect>());
+        var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>(), true);
+        node.AddBehavior(new InitializeChoice(op, new Event()), Array.Empty<ExecutionEffect>(), true);
         Assert.That(node.Transitions.ContainsKey(new InitializeChoice(op, new Event())), Is.True);
         Assert.That(node.Transitions.ContainsKey(new InitializeChoice(op, null)), Is.False);
         Assert.That(node.Transitions.ContainsKey(Choice(0, op)), Is.False);
@@ -152,15 +155,15 @@ public class BehaviorStoreTests
         var snapshot = live.Snapshot();
         var query = MakeChoice().Snapshot();
         var store = new BehaviorStore();
-        store.AddBehavior(Array.Empty<SchedulingChoice>(), snapshot, Array.Empty<ExecutionEffect>());
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), snapshot, Array.Empty<ExecutionEffect>(), true);
 
         ((PSeq)payload[0]).Add(new PInt(3));
         payload.Add(new PInt(4));
         ((PSeq)received.Payload).Add(new PInt(5));
         e.Payload = new PInt(6);
 
-        Assert.That(store.GetBehavior(new List<SchedulingChoice> { query }, out _), Is.True);
-        Assert.That(store.GetBehavior(new List<SchedulingChoice> { live }, out _), Is.False);
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { query }, out _, out _), Is.True);
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { live }, out _, out _), Is.False);
         Assert.That(snapshot.Operation, Is.SameAs(live.Operation));
     }
 
@@ -208,8 +211,8 @@ public class BehaviorStoreTests
                 _ => new CompleteReceiveChoice(receiver, (e, null), (e, info), false)
             };
         }
-        var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>());
-        node.AddBehavior(Input(firstSender, "Before"), Array.Empty<ExecutionEffect>());
+        var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>(), true);
+        node.AddBehavior(Input(firstSender, "Before"), Array.Empty<ExecutionEffect>(), true);
         Assert.That(node.Transitions.ContainsKey(Input(firstSender, "After")), Is.True);
         Assert.That(node.Transitions.ContainsKey(Input(secondSender, "Before")), Is.False);
     }
@@ -227,8 +230,8 @@ public class BehaviorStoreTests
             firstChild, 
             new Event(payload));
         var choice = Choice(0, creator);
-        var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>());
-        node.AddBehavior(choice, new ExecutionEffect[] { recorded });
+        var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>(), true);
+        node.AddBehavior(choice, new ExecutionEffect[] { recorded }, true);
         payload.Add(new PInt(2));
 
         var equivalentChild = Operation(runtime, path: firstChild.CreationPath).StateMachine.Id;
@@ -237,7 +240,7 @@ public class BehaviorStoreTests
         CreateEffect Creation(StateMachineId parent, StateMachineId child, int value) =>
             new CreateEffect(parent, child,
                 new Event(new PSeq(new IPValue[] { new PInt(value) })));
-        bool Matches(CreateEffect effect) => node.AddBehavior(choice, new ExecutionEffect[] { effect });
+        bool Matches(CreateEffect effect) => node.AddBehavior(choice, new ExecutionEffect[] { effect }, true);
 
         Assert.That(Matches(Creation(creator.StateMachine.Id, equivalentChild, 1)), Is.True);
         Assert.That(recorded.CreatedStateMachineId, Is.SameAs(firstChild));
@@ -307,9 +310,9 @@ public class BehaviorStoreTests
         var effects = new ExecutionEffect[] { new SendEffect(receiver1.StateMachine.Id, firstEvent, a1) };
         var matchingEffects = new ExecutionEffect[] { new SendEffect(receiver2.StateMachine.Id, secondEvent, a2) };
         var store = new BehaviorStore();
-        store.AddBehavior(Array.Empty<SchedulingChoice>(), first, effects);
-        Assert.That(store.GetBehavior(new List<SchedulingChoice> { second }, out _), Is.True);
-        Assert.DoesNotThrow(() => store.AddBehavior(Array.Empty<SchedulingChoice>(), second, matchingEffects));
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), first, effects, true);
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { second }, out _, out _), Is.True);
+        Assert.DoesNotThrow(() => store.AddBehavior(Array.Empty<SchedulingChoice>(), second, matchingEffects, true));
         Assert.That(BehaviorStoreComparers.EffectEquality.GetHashCode(effects[0]),
             Is.EqualTo(BehaviorStoreComparers.EffectEquality.GetHashCode(matchingEffects[0])));
 
@@ -348,6 +351,116 @@ public class BehaviorStoreTests
         Assert.That(comparer.Equals(first, second), Is.True);
         Assert.That(comparer.GetHashCode(first), Is.EqualTo(comparer.GetHashCode(second)));
         Assert.That(comparer.Equals(first, new CreateEffect(id, id, null)), Is.False);
+    }
+
+    private static ExecutionEffect[] Announcements(params int[] payloads) =>
+        payloads.Select(value => (ExecutionEffect)new AnnounceEffect(null, new Event(new PInt(value)))).ToArray();
+
+    [TestCase(1, false, 2, true, 2, true)]
+    [TestCase(2, true, 1, false, 2, true)]
+    [TestCase(1, false, 2, false, 2, false)]
+    [TestCase(2, false, 1, false, 2, false)]
+    [TestCase(2, false, 2, true, 2, true)]
+    [TestCase(2, true, 2, false, 2, true)]
+    [TestCase(2, false, 2, false, 2, false)]
+    [TestCase(2, true, 2, true, 2, true)]
+    [TestCase(0, false, 2, true, 2, true)]
+    [TestCase(2, true, 0, false, 2, true)]
+    [TestCase(0, false, 2, false, 2, false)]
+    [TestCase(2, false, 0, false, 2, false)]
+    [TestCase(0, false, 0, true, 0, true)]
+    [TestCase(0, true, 0, false, 0, true)]
+    [TestCase(0, false, 0, false, 0, false)]
+    [TestCase(0, true, 0, true, 0, true)]
+    public void CompatibleObservationsKeepLongestPrefixAndCompletionStatus(
+        int firstCount, bool firstComplete, int secondCount, bool secondComplete,
+        int expectedCount, bool expectedComplete)
+    {
+        using var runtime = NewRuntime();
+        var choice = Choice(0, Operation(runtime));
+        var trace = new List<SchedulingChoice> { choice };
+        var store = new BehaviorStore();
+        var first = Announcements(Enumerable.Range(1, firstCount).ToArray());
+        var second = Announcements(Enumerable.Range(1, secondCount).ToArray());
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), choice, first, firstComplete);
+
+        Assert.That(store.GetBehavior(trace, out var initial, out var initiallyComplete), Is.True);
+        Assert.That(initial, Is.SameAs(first));
+        Assert.That(initiallyComplete, Is.EqualTo(firstComplete));
+
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), choice, second, secondComplete);
+
+        Assert.That(store.GetBehavior(trace, out var effects, out var complete), Is.True);
+        Assert.That(effects.SequenceEqual(
+            Announcements(Enumerable.Range(1, expectedCount).ToArray()),
+            BehaviorStoreComparers.EffectEquality), Is.True);
+        Assert.That(complete, Is.EqualTo(expectedComplete));
+    }
+
+    [TestCase(2, true, 1, true)]
+    [TestCase(1, true, 2, true)]
+    [TestCase(2, false, 1, true)]
+    [TestCase(1, true, 2, false)]
+    [TestCase(0, true, 1, false)]
+    [TestCase(1, false, 0, true)]
+    public void ObservationsCannotExtendBeyondACompleteBehavior(
+        int firstCount, bool firstComplete, int secondCount, bool secondComplete)
+    {
+        using var runtime = NewRuntime();
+        var choice = Choice(0, Operation(runtime));
+        var store = new BehaviorStore();
+        var first = Announcements(Enumerable.Range(1, firstCount).ToArray());
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), choice, first, firstComplete);
+
+        Assert.Throws<PInternalException>(() => store.AddBehavior(
+            Array.Empty<SchedulingChoice>(), choice,
+            Announcements(Enumerable.Range(1, secondCount).ToArray()), secondComplete));
+
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { choice }, out var effects, out var complete), Is.True);
+        Assert.That(effects, Is.SameAs(first), "A rejected observation must not modify the store.");
+        Assert.That(complete, Is.EqualTo(firstComplete));
+    }
+
+    [Test]
+    public void ConflictingPrefixesAreRejectedWithoutChangingTheStore(
+        [Values(false, true)] bool firstComplete, [Values(false, true)] bool secondComplete)
+    {
+        using var runtime = NewRuntime();
+        var choice = Choice(0, Operation(runtime));
+        var store = new BehaviorStore();
+        var first = Announcements(1, 2);
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), choice, first, firstComplete);
+
+        Assert.Throws<PInternalException>(() => store.AddBehavior(
+            Array.Empty<SchedulingChoice>(), choice, Announcements(1, 3), secondComplete));
+
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { choice }, out var effects, out var complete), Is.True);
+        Assert.That(effects, Is.SameAs(first));
+        Assert.That(complete, Is.EqualTo(firstComplete));
+    }
+
+    [Test]
+    public void CompletingAPrefixAllowsDescendantsAndLaterInterruptionsPreserveThem()
+    {
+        using var runtime = NewRuntime();
+        var op = Operation(runtime);
+        var first = Choice(0, op);
+        var next = Choice(1, op);
+        var store = new BehaviorStore();
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), first, Announcements(1), false);
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), first, Announcements(1, 2), true);
+        store.AddBehavior(new[] { first }, next, Announcements(3), true);
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), first, Announcements(1), false);
+
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { first, next },
+            out var effects, out var complete), Is.True);
+        Assert.That(effects.SequenceEqual(Announcements(3), BehaviorStoreComparers.EffectEquality), Is.True);
+        Assert.That(complete, Is.True);
+
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { first, Choice(2, op) },
+            out effects, out complete), Is.False);
+        Assert.That(effects, Is.Empty);
+        Assert.That(complete, Is.False, "A missing trace must not be reported as complete.");
     }
 
     private sealed class PayloadEvent : Event

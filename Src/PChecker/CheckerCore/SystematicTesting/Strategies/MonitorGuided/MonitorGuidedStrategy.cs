@@ -150,7 +150,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// <inheritdoc/>
         public virtual void NotifyEffects(
             SchedulingChoice lastChoice,
-            IReadOnlyList<ExecutionEffect> effects)
+            IReadOnlyList<ExecutionEffect> effects, 
+            bool completeBehavior)
         {
             var creationPath = lastChoice.GetCreationPath();
             if (creationPath == null) return;
@@ -167,7 +168,11 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 _machineTraces[creationPath] = machineTrace;
             }
 
-            behaviorStore.AddBehavior(machineTrace, lastChoice, effects);
+            behaviorStore.AddBehavior(
+                machineTrace, 
+                lastChoice, 
+                effects, 
+                completeBehavior);
             machineTrace.Add(lastChoice);
         }
     }
