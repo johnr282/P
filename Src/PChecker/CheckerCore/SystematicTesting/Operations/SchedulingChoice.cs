@@ -1,4 +1,5 @@
 ﻿using PChecker.Runtime.Events;
+using PChecker.Runtime.StateMachines;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -54,6 +55,26 @@ namespace PChecker.SystematicTesting.Operations
         private static (Event e, EventInfo info) SnapshotEventWithMetadata(
             (Event e, EventInfo info) input) =>
             (input.e?.Snapshot(), input.info);
+
+        /// <summary>
+        /// Returns the creation path of the state machine corresponding to 
+        /// choice, or null if choice has no corresponding machine. 
+        /// </summary>
+        public MachineCreationPath GetCreationPath() => 
+            GetStateMachineId()?.CreationPath;
+
+        /// <summary>
+        /// Returns the id of the state machine corresponding to choice, or null
+        /// if choice has no corresponding machine.
+        /// </summary>
+        public StateMachineId GetStateMachineId() => 
+            GetStateMachineOp()?.StateMachine.Id;
+
+        /// <summary>
+        /// Returns choice's StateMachineOperation, or null if none exists.
+        /// </summary>
+        public StateMachineOperation GetStateMachineOp() => 
+            Operation is StateMachineOperation op ? op : null;
     }
 
     /// <inheritdoc/>

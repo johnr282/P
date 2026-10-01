@@ -96,7 +96,7 @@ public class BehaviorStoreTests
         {
             new SendEffect(sender, new Event(new PInt(payload)), target),
             new AnnounceEffect(sender, new Event(new PInt(3))),
-            new CreateEffect(sender, target, typeof(TestMachine), "Machine", null)
+            new CreateEffect(sender, target, null)
         };
         Assert.That(node.AddBehavior(choice, Effects(2)), Is.True);
         Assert.That(node.AddBehavior(Choice(0, op), Effects(2)), Is.True);
@@ -216,15 +216,17 @@ public class BehaviorStoreTests
         var firstChild = Operation(runtime).StateMachine.Id;
         var secondChild = Operation(runtime).StateMachine.Id;
         var payload = new PSeq(new IPValue[] { new PInt(1) });
-        var recorded = new CreateEffect(creator.StateMachine.Id, firstChild,
-            typeof(TestMachine), "Child", new Event(payload));
+        var recorded = new CreateEffect(
+            creator.StateMachine.Id, 
+            firstChild, 
+            new Event(payload));
         var choice = Choice(0, creator);
         var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>());
         node.AddBehavior(choice, new ExecutionEffect[] { recorded });
         payload.Add(new PInt(2));
 
         CreateEffect Creation(StateMachineId parent, Type type, string name, int value) =>
-            new CreateEffect(parent, secondChild, type, name,
+            new CreateEffect(parent, secondChild,
                 new Event(new PSeq(new IPValue[] { new PInt(value) })));
         bool Matches(CreateEffect effect) => node.AddBehavior(choice, new ExecutionEffect[] { effect });
 

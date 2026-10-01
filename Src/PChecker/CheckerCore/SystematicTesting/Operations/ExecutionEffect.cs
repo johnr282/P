@@ -75,20 +75,15 @@ namespace PChecker.SystematicTesting.Operations
         // Not used for behavior equality; identical machine creations can have
         // different IDs across different runs. 
         internal StateMachineId CreatedStateMachineId { get; }
-        internal Type CreatedStateMachineType { get; }
-        internal string CreatedStateMachineName { get; }
         internal Event InitialEvent { get; }
 
-        internal CreateEffect(StateMachineId stateMachineId, 
+        internal CreateEffect(
+            StateMachineId stateMachineId, 
             StateMachineId createdStateMachineId,
-            Type createdStateMachineType,
-            string createdStateMachineName,
             Event initialEvent)
             : base(stateMachineId)
         {
             CreatedStateMachineId = createdStateMachineId;
-            CreatedStateMachineType = createdStateMachineType;
-            CreatedStateMachineName = createdStateMachineName;
             InitialEvent = initialEvent?.Snapshot();
         }
     }

@@ -422,7 +422,7 @@ namespace PChecker.SystematicTesting
             LogWriter.LogCreateStateMachine(id, creator?.Id.Name, creator?.Id.Type);
 
             EffectsSinceLastSchedulingChoice.Add(
-                new CreateEffect(creator?.Id, stateMachine.Id, type, name, initialEvent));
+                new CreateEffect(creator?.Id, stateMachine.Id, initialEvent));
 
             return stateMachine;
         }

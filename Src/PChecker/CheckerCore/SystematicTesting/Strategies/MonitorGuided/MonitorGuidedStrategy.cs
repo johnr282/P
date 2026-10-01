@@ -20,10 +20,11 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private Monitor _monitor;
         private MonitorAnalyzer _monitorAnalyzer;
 
-        private readonly Dictionary<StateMachineId, List<SchedulingChoice>> 
+        private readonly Dictionary<MachineCreationPath, List<SchedulingChoice>> 
             _machineTraces = new();
 
-        private readonly Dictionary<StateMachineId, BehaviorStore> _behaviorStores = new();
+        private readonly Dictionary<MachineCreationPath, BehaviorStore> 
+            _behaviorStores = new();
 
         public MonitorGuidedStrategy()
         {
@@ -151,50 +152,23 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             SchedulingChoice lastChoice,
             IReadOnlyList<ExecutionEffect> effects)
         {
-            if (!GetStateMachineIdFromChoice(lastChoice, out var machineId))
-            {
-                return;
-            }
+            var creationPath = lastChoice.GetCreationPath();
+            if (creationPath == null) return;
 
-            if (!_behaviorStores.TryGetValue(machineId, out var behaviorStore))
+            if (!_behaviorStores.TryGetValue(creationPath, out var behaviorStore))
             {
                 behaviorStore = new BehaviorStore();
-                _behaviorStores[machineId] = behaviorStore;
+                _behaviorStores[creationPath] = behaviorStore;
             }
 
-            if (!_machineTraces.TryGetValue(machineId, out var machineTrace))
+            if (!_machineTraces.TryGetValue(creationPath, out var machineTrace))
             {
                 machineTrace = new();
-                _machineTraces[machineId] = machineTrace;
+                _machineTraces[creationPath] = machineTrace;
             }
 
             behaviorStore.AddBehavior(machineTrace, lastChoice, effects);
             machineTrace.Add(lastChoice);
-        }
-
-        /// <summary>
-        /// Retrieves the ID of the state machine corresponding to choice.
-        /// </summary>
-        /// <returns>
-        /// True if choice has a corresponding machine and an ID was retrieved, 
-        /// false otherwise.
-        /// </returns>
-        private static bool GetStateMachineIdFromChoice(
-            SchedulingChoice choice, 
-            out StateMachineId id)
-        {
-            var op = choice.Operation;
-            switch (op)
-            {
-                case StateMachineOperation machineOp:
-                    id = machineOp.StateMachine.Id;
-                    return true;
-
-                case TaskOperation:
-                default:
-                    id = null;
-                    return false;
-            }
         }
     }
 }

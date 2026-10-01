@@ -5,6 +5,7 @@ using PChecker.Runtime.Values;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using PChecker.Runtime.StateMachines;
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 {
@@ -14,127 +15,10 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
     /// </summary>
     internal class BehaviorStore
     {
-        private static readonly ChoiceComparer ChoiceEquality = new();
-        private static readonly EffectComparer EffectEquality = new();
-
-        // Compare payloads using P value semantics rather than Event.Equals,
-        // which ignores payloads.
-        private static bool SameEvent(Event x, Event y) =>
-            ReferenceEquals(x, y) || x != null && y != null &&
-            x.GetType() == y.GetType() && PValues.SafeEquals(x.Payload, y.Payload);
-
-        private static int EventHash(Event e) =>
-            e is null ? 0 : HashCode.Combine(e.GetType(), e.Payload);
-
-        private static bool SameEventWithMetadata((Event e, EventInfo info) x, 
-            (Event e, EventInfo info) y) =>
-            SameEvent(x.e, y.e) && object.Equals(
-                x.info?.OriginInfo?.SenderStateMachineId,
-                y.info?.OriginInfo?.SenderStateMachineId);
-
-        private static int EventWithMetadataHash((Event e, EventInfo info) input) =>
-            HashCode.Combine(
-                EventHash(input.e), 
-                input.info?.OriginInfo?.SenderStateMachineId);
-
-        /// <summary>
-        /// Compares choices by concrete operation identity and input values.
-        /// Payloads must not change while their choices are stored as trie keys.
-        /// </summary>
-        private sealed class ChoiceComparer : IEqualityComparer<SchedulingChoice>
-        {
-            private static ((Event e, EventInfo info) First, (Event e, EventInfo info) Second, bool InInitialization)
-                Inputs(SchedulingChoice choice) =>
-                choice switch
-                {
-                    InitializeChoice c => ((c.InitialEvent, null), default, false),
-                    ResumeInitializationChoice c => ((c.InitialEvent, null), default, false),
-                    DeliverEventChoice c => (c.EventToDeliver, default, false),
-                    ResumeHandlerChoice c => (c.EventToResume, default, false),
-                    CompleteReceiveChoice c => (
-                        c.EventToResume,
-                        c.EventToDeliver,
-                        c.InInitialization),
-                    RunTaskChoice => (default, default, false),
-
-                    _ => throw new NotSupportedException(
-                        $"Unsupported scheduling choice: {choice.GetType()}")
-                };
-
-            public bool Equals(SchedulingChoice x, SchedulingChoice y)
-            {
-                if (ReferenceEquals(x, y)) return true;
-                if (x is null || y is null || x.GetType() != y.GetType() ||
-                    x.Operation.Id != y.Operation.Id ||
-                    !StringComparer.Ordinal.Equals(x.Operation.Name, y.Operation.Name)) 
-                    return false;
-
-                var a = Inputs(x);
-                var b = Inputs(y);
-                return a.InInitialization == b.InInitialization &&
-                    SameEventWithMetadata(a.First, b.First) && SameEventWithMetadata(a.Second, b.Second);
-            }
-
-            public int GetHashCode(SchedulingChoice choice)
-            {
-                if (choice is null) return 0;
-                var inputs = Inputs(choice);
-                return HashCode.Combine(choice.GetType(), choice.Operation.Id, 
-                    choice.Operation.Name, EventWithMetadataHash(inputs.First),
-                    EventWithMetadataHash(inputs.Second), inputs.InInitialization);
-            }
-        }
-
-        private sealed class EffectComparer : IEqualityComparer<ExecutionEffect>
-        {
-            public bool Equals(ExecutionEffect x, ExecutionEffect y)
-            {
-                if (ReferenceEquals(x, y)) return true;
-                if (x is null || y is null || x.GetType() != y.GetType() ||
-                    !object.Equals(x.StateMachineId, y.StateMachineId)) 
-                    return false;
-
-                return (x, y) switch
-                {
-                    (SendEffect a, SendEffect b) =>
-                        object.Equals(a.TargetStateMachineId, b.TargetStateMachineId) &&
-                        SameEvent(a.SentEvent, b.SentEvent),
-                    (AnnounceEffect a, AnnounceEffect b) => 
-                        SameEvent(a.AnnouncedEvent, b.AnnouncedEvent),
-                    (CreateEffect a, CreateEffect b) =>
-                        a.CreatedStateMachineType == b.CreatedStateMachineType &&
-                        StringComparer.Ordinal.Equals(a.CreatedStateMachineName, b.CreatedStateMachineName) &&
-                        SameEvent(a.InitialEvent, b.InitialEvent),
-
-                    _ => throw new NotSupportedException(
-                        $"Unsupported execution effect: {x.GetType()}")
-                };
-            }
-
-            public int GetHashCode(ExecutionEffect effect)
-            {
-                if (effect is null) return 0;
-                var detail = effect switch
-                {
-                    SendEffect e => 
-                        HashCode.Combine(e.TargetStateMachineId, EventHash(e.SentEvent)),
-                    AnnounceEffect e => EventHash(e.AnnouncedEvent),
-                    CreateEffect e => HashCode.Combine(
-                        e.CreatedStateMachineType,
-                        e.CreatedStateMachineName, 
-                        EventHash(e.InitialEvent)),
-
-                    _ => throw new NotSupportedException(
-                        $"Unsupported execution effect: {effect.GetType()}")
-                };
-                return HashCode.Combine(effect.GetType(), effect.StateMachineId, detail);
-            }
-        }
-
         internal sealed class BehaviorNode
         {
             public Dictionary<SchedulingChoice, BehaviorNode> Transitions { get; } 
-                = new(ChoiceEquality);
+                = new(BehaviorStoreComparers.ChoiceEquality);
             public IReadOnlyList<ExecutionEffect> Effects { get; }
 
             public BehaviorNode(IReadOnlyList<ExecutionEffect> effects)
@@ -159,7 +43,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                     return true;
                 }
 
-                return nextNode.Effects.SequenceEqual(effects, EffectEquality);
+                return nextNode.Effects.SequenceEqual(effects, 
+                    BehaviorStoreComparers.EffectEquality);
             }
         }
 
@@ -223,6 +108,186 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
             effects = current.Effects;
             return true;
+        }
+    }
+
+    internal class BehaviorStoreComparers
+    {
+        internal static readonly ChoiceComparer ChoiceEquality = new();
+        internal static readonly EffectComparer EffectEquality = new();
+
+        // Compare payloads using P value semantics rather than Event.Equals,
+        // which ignores payloads.
+        private static bool SameEvent(Event x, Event y) =>
+            ReferenceEquals(x, y) || x != null && y != null &&
+            x.GetType() == y.GetType() && PValues.SafeEquals(x.Payload, y.Payload);
+
+        private static int EventHash(Event e) =>
+            e is null ? 0 : HashCode.Combine(e.GetType(), e.Payload);
+
+        private static bool SameEventWithMetadata((Event e, EventInfo info) x,
+            (Event e, EventInfo info) y) =>
+            SameEvent(x.e, y.e) && object.Equals(
+                x.info?.OriginInfo?.SenderStateMachineId?.CreationPath,
+                y.info?.OriginInfo?.SenderStateMachineId?.CreationPath);
+
+        private static int EventWithMetadataHash((Event e, EventInfo info) input) =>
+            HashCode.Combine(
+                EventHash(input.e),
+                input.info?.OriginInfo?.SenderStateMachineId?.CreationPath);
+
+        private static bool SameStateMachineId(StateMachineId x, StateMachineId y) =>
+            x.CreationPath.Equals(y.CreationPath) &&
+            StringComparer.Ordinal.Equals(x.Type, y.Type);
+
+        private static int StateMachineIdHash(StateMachineId id) =>
+            HashCode.Combine(
+                id.CreationPath.GetHashCode(),
+                id.Type.GetHashCode());
+
+        private static bool SameAsyncOperation(AsyncOperation x, AsyncOperation y) =>
+            x.Id == y.Id;
+
+        private static int AsyncOperationHash(AsyncOperation op) => (int)op.Id;
+
+        /// <summary>
+        /// Compares choices by concrete operation identity and input values.
+        /// Payloads must not change while their choices are stored as trie keys.
+        /// </summary>
+        internal sealed class ChoiceComparer : IEqualityComparer<SchedulingChoice>
+        {
+            private sealed record ChoiceEvents(
+                (Event e, EventInfo info) First, 
+                (Event e, EventInfo info) Second, 
+                bool InInitialization);
+
+            private static ChoiceEvents GetEventsFromChoice(SchedulingChoice choice) =>
+                choice switch
+                {
+                    InitializeChoice c => 
+                        new ChoiceEvents((c.InitialEvent, null), default, false),
+                    ResumeInitializationChoice c => 
+                        new ChoiceEvents((c.InitialEvent, null), default, false),
+                    DeliverEventChoice c => 
+                        new ChoiceEvents(c.EventToDeliver, default, false),
+                    ResumeHandlerChoice c => 
+                        new ChoiceEvents(c.EventToResume, default, false),
+                    CompleteReceiveChoice c => new ChoiceEvents(
+                        c.EventToResume,
+                        c.EventToDeliver,
+                        c.InInitialization),
+
+                    _ => throw new NotSupportedException(
+                        $"Unsupported scheduling choice: {choice.GetType()}")
+                };
+
+            public bool Equals(SchedulingChoice x, SchedulingChoice y)
+            {
+                if (ReferenceEquals(x, y)) return true;
+
+                if (x is null || y is null || 
+                    x.GetType() != y.GetType())
+                    return false;
+
+                var xId = x.GetStateMachineId();
+                var yId = y.GetStateMachineId();
+
+                if (xId == null && yId == null)
+                {
+                    // Choices do not have associated state machines, so simply
+                    // compare operations
+                    return SameAsyncOperation(x.Operation, y.Operation);
+                }
+
+                var xEvents = GetEventsFromChoice(x);
+                var yEvents = GetEventsFromChoice(y);
+                return SameStateMachineId(xId, yId) &&
+                    SameEventWithMetadata(xEvents.First, yEvents.First) &&
+                    SameEventWithMetadata(xEvents.Second, yEvents.Second) &&
+                    xEvents.InInitialization == yEvents.InInitialization;
+            }
+
+            public int GetHashCode(SchedulingChoice choice)
+            {
+                if (choice is null) return 0;
+
+                var hash = new HashCode();
+
+                var choiceMachineId = choice.GetStateMachineId();
+                if (choiceMachineId == null)
+                {
+                    hash.Add(AsyncOperationHash(choice.Operation));
+                }
+                else
+                {
+                    hash.Add(StateMachineIdHash(choiceMachineId));
+                }
+
+                var inputs = GetEventsFromChoice(choice);
+                return HashCode.Combine(
+                    choice.GetType(), 
+                    EventWithMetadataHash(inputs.First),
+                    EventWithMetadataHash(inputs.Second), 
+                    inputs.InInitialization);
+            }
+        }
+
+        internal sealed class EffectComparer : IEqualityComparer<ExecutionEffect>
+        {
+            public bool Equals(ExecutionEffect x, ExecutionEffect y)
+            {
+                if (ReferenceEquals(x, y)) return true;
+
+                if (x is null || y is null || 
+                    x.GetType() != y.GetType() ||
+                    !SameStateMachineId(x.StateMachineId, y.StateMachineId))
+                    return false;
+
+                // Effects were produced by same machine, so compare effect details
+                return (x, y) switch
+                {
+                    (SendEffect a, SendEffect b) =>
+                        SameStateMachineId(a.TargetStateMachineId, 
+                            b.TargetStateMachineId) &&
+                        SameEvent(a.SentEvent, b.SentEvent),
+
+                    (AnnounceEffect a, AnnounceEffect b) =>
+                        SameEvent(a.AnnouncedEvent, b.AnnouncedEvent),
+
+                    (CreateEffect a, CreateEffect b) =>
+                        SameStateMachineId(a.CreatedStateMachineId, 
+                            b.CreatedStateMachineId) &&
+                        SameEvent(a.InitialEvent, b.InitialEvent),
+
+                    _ => throw new NotSupportedException(
+                        $"Unsupported execution effect: {x.GetType()}")
+                };
+            }
+
+            public int GetHashCode(ExecutionEffect effect)
+            {
+                if (effect is null) return 0;
+
+                var detail = effect switch
+                {
+                    SendEffect e => HashCode.Combine(
+                        StateMachineIdHash(e.TargetStateMachineId), 
+                        EventHash(e.SentEvent)),
+
+                    AnnounceEffect e => EventHash(e.AnnouncedEvent),
+
+                    CreateEffect e => HashCode.Combine(
+                        StateMachineIdHash(e.CreatedStateMachineId),
+                        EventHash(e.InitialEvent)),
+
+                    _ => throw new NotSupportedException(
+                        $"Unsupported execution effect: {effect.GetType()}")
+                };
+                return HashCode.Combine(
+                    effect.GetType(), 
+                    StateMachineIdHash(effect.StateMachineId), 
+                    detail);
+            }
         }
     }
 }
