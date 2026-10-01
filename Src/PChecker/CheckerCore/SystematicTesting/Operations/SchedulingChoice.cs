@@ -14,16 +14,16 @@ namespace PChecker.SystematicTesting.Operations
     internal abstract class SchedulingChoice
     {
         /// <summary>
-        /// The operation that will be scheduled. 
+        /// The Id of the operation that will be scheduled.
         /// </summary>
-        public AsyncOperation Operation { get; }
+        public ulong OperationId { get; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SchedulingChoice"/> class.
         /// </summary>
-        protected SchedulingChoice(AsyncOperation operation)
+        protected SchedulingChoice(ulong operationId)
         {
-            Operation = operation;
+            OperationId = operationId;
         }
 
         /// <summary>
@@ -34,19 +34,23 @@ namespace PChecker.SystematicTesting.Operations
         internal SchedulingChoice Snapshot() => this switch
         {
             InitializeChoice c => 
-                new InitializeChoice(c.Operation, c.InitialEvent?.Snapshot()),
+                new InitializeChoice(c.OperationId, c.StateMachineId, 
+                    c.InitialEvent?.Snapshot()),
             ResumeInitializationChoice c =>
-                new ResumeInitializationChoice(c.Operation, c.InitialEvent?.Snapshot()),
+                new ResumeInitializationChoice(c.OperationId, c.StateMachineId, 
+                    c.InitialEvent?.Snapshot()),
             DeliverEventChoice c => 
-                new DeliverEventChoice(c.Operation, SnapshotEventWithMetadata(c.EventToDeliver)),
+                new DeliverEventChoice(c.OperationId, c.StateMachineId, 
+                    SnapshotEventWithMetadata(c.EventToDeliver)),
             ResumeHandlerChoice c => 
-                new ResumeHandlerChoice(c.Operation, SnapshotEventWithMetadata(c.EventToResume)),
-            CompleteReceiveChoice c => new CompleteReceiveChoice(
-                c.Operation,
-                SnapshotEventWithMetadata(c.EventToResume), 
-                SnapshotEventWithMetadata(c.EventToDeliver), 
-                c.InInitialization),
-            RunTaskChoice c => new RunTaskChoice(c.Operation),
+                new ResumeHandlerChoice(c.OperationId, c.StateMachineId, 
+                    SnapshotEventWithMetadata(c.EventToResume)),
+            CompleteReceiveChoice c => 
+                new CompleteReceiveChoice(c.OperationId, c.StateMachineId,
+                    SnapshotEventWithMetadata(c.EventToResume), 
+                    SnapshotEventWithMetadata(c.EventToDeliver), 
+                    c.InInitialization),
+            RunTaskChoice c => new RunTaskChoice(c.OperationId),
 
             _ => throw new NotSupportedException(
                 $"Unsupported scheduling choice: {GetType()}")
@@ -67,25 +71,26 @@ namespace PChecker.SystematicTesting.Operations
         /// Returns the id of the state machine corresponding to choice, or null
         /// if choice has no corresponding machine.
         /// </summary>
-        public StateMachineId GetStateMachineId() => 
-            GetStateMachineOp()?.StateMachine.Id;
-
-        /// <summary>
-        /// Returns choice's StateMachineOperation, or null if none exists.
-        /// </summary>
-        public StateMachineOperation GetStateMachineOp() => 
-            Operation is StateMachineOperation op ? op : null;
+        public StateMachineId GetStateMachineId() => this switch
+        {
+            StateMachineSchedulingChoice machineChoice => machineChoice.StateMachineId,
+            _ => null
+        };
     }
 
-    /// <inheritdoc/>
-    internal abstract class SchedulingChoice<TOperation> : SchedulingChoice
-        where TOperation : AsyncOperation
+    /// <summary>
+    /// Scheduling choice with an associated state machine.
+    /// </summary>
+    internal abstract class StateMachineSchedulingChoice : SchedulingChoice
     {
-        public new TOperation Operation => (TOperation)base.Operation;
+        public StateMachineId StateMachineId { get; }
 
-        internal SchedulingChoice(TOperation operation)
-            : base(operation)
+        internal StateMachineSchedulingChoice(
+            ulong operationId,
+            StateMachineId machineId)
+            : base(operationId)
         {
+            StateMachineId = machineId;
         }
     }
 
@@ -96,7 +101,7 @@ namespace PChecker.SystematicTesting.Operations
     /// <see cref="ResumeHandlerChoice"/>) because initializing a state machine with 
     /// event e and handling event e after initialization are distinct behaviors. 
     /// </summary>
-    internal sealed class InitializeChoice : SchedulingChoice<StateMachineOperation>
+    internal sealed class InitializeChoice : StateMachineSchedulingChoice
     {
         /// <summary>
         /// Event passed to the initial entry function; no EventInfo because initial
@@ -107,9 +112,11 @@ namespace PChecker.SystematicTesting.Operations
         /// <summary>
         /// Initializes a new instance of the <see cref="InitializeChoice"/> class.
         /// </summary>
-        internal InitializeChoice(StateMachineOperation operation,
+        internal InitializeChoice(
+            ulong operationId, 
+            StateMachineId machineId,
             Event initialEvent)
-            : base(operation)
+            : base(operationId, machineId)
         {
             InitialEvent = initialEvent;
         }
@@ -119,7 +126,7 @@ namespace PChecker.SystematicTesting.Operations
     /// Represents resuming execution of the entry function of a state machine's
     /// initial state.
     /// </summary>
-    internal sealed class ResumeInitializationChoice : SchedulingChoice<StateMachineOperation>
+    internal sealed class ResumeInitializationChoice : StateMachineSchedulingChoice
     {
         /// <summary>
         /// Event passed to the initial entry function. 
@@ -129,9 +136,11 @@ namespace PChecker.SystematicTesting.Operations
         /// <summary>
         /// Initializes a new instance of the <see cref="InitializeChoice"/> class.
         /// </summary>
-        internal ResumeInitializationChoice(StateMachineOperation operation,
+        internal ResumeInitializationChoice(
+            ulong operationId, 
+            StateMachineId machineId,
             Event initialEvent)
-            : base(operation)
+            : base(operationId, machineId)
         {
             InitialEvent = initialEvent;
         }
@@ -141,7 +150,7 @@ namespace PChecker.SystematicTesting.Operations
     /// Represents delivering an event to a state machine and executing the 
     /// corresponding handler.
     /// </summary>
-    internal sealed class DeliverEventChoice : SchedulingChoice<StateMachineOperation>
+    internal sealed class DeliverEventChoice : StateMachineSchedulingChoice
     {
         /// <summary>
         /// Event that will be delivered to the operation.
@@ -151,9 +160,11 @@ namespace PChecker.SystematicTesting.Operations
         /// <summary>
         /// Initializes a new instance of the <see cref="DeliverEventChoice"/> class.
         /// </summary>
-        internal DeliverEventChoice(StateMachineOperation operation, 
+        internal DeliverEventChoice(
+            ulong operationId, 
+            StateMachineId machineId,
             (Event e, EventInfo info) eventToDeliver)
-            : base(operation)
+            : base(operationId, machineId)
         {
             EventToDeliver = eventToDeliver;
         }
@@ -162,7 +173,7 @@ namespace PChecker.SystematicTesting.Operations
     /// <summary>
     /// Represents resuming execution of an in-progress event handler.
     /// </summary>
-    internal sealed class ResumeHandlerChoice : SchedulingChoice<StateMachineOperation>
+    internal sealed class ResumeHandlerChoice : StateMachineSchedulingChoice
     {
         /// <summary>
         /// Event whose handler will resume.
@@ -172,9 +183,11 @@ namespace PChecker.SystematicTesting.Operations
         /// <summary>
         /// Initializes a new instance of the <see cref="ResumeHandlerChoice"/> class.
         /// </summary>
-        internal ResumeHandlerChoice(StateMachineOperation operation, 
+        internal ResumeHandlerChoice(
+            ulong operationId, 
+            StateMachineId machineId,
             (Event e, EventInfo info) eventToResume)
-            : base(operation)
+            : base(operationId, machineId)
         {
             EventToResume = eventToResume;
         }
@@ -183,7 +196,7 @@ namespace PChecker.SystematicTesting.Operations
     /// <summary>
     /// Represents delivering an event to a state machine currently blocked on a receive. 
     /// </summary>
-    internal sealed class CompleteReceiveChoice : SchedulingChoice<StateMachineOperation>
+    internal sealed class CompleteReceiveChoice : StateMachineSchedulingChoice
     {
         /// <summary>
         /// Event whose handler called receive and will resume.
@@ -204,11 +217,11 @@ namespace PChecker.SystematicTesting.Operations
         /// Initializes a new instance of the <see cref="CompleteReceiveChoice"/> class.
         /// </summary>
         internal CompleteReceiveChoice(
-            StateMachineOperation operation,
+            ulong operationId, StateMachineId machineId,
             (Event e, EventInfo info) eventToResume, 
             (Event e, EventInfo info) eventToDeliver,
             bool inInitialization)
-            : base(operation)
+            : base(operationId, machineId)
         {
             EventToResume = eventToResume;
             EventToDeliver = eventToDeliver;
@@ -219,13 +232,13 @@ namespace PChecker.SystematicTesting.Operations
     /// <summary>
     /// Represents executing a TaskOperation. 
     /// </summary>
-    internal sealed class RunTaskChoice : SchedulingChoice<TaskOperation>
+    internal sealed class RunTaskChoice : SchedulingChoice
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="RunTaskChoice"/> class.
         /// </summary>
-        internal RunTaskChoice(TaskOperation operation)
-            : base(operation)
+        internal RunTaskChoice(ulong operationId)
+            : base(operationId)
         {
         }
     }

@@ -44,7 +44,7 @@ public class ExecutionEffectNotificationTests
         Assert.That(callbackInvoked, Is.True);
         Assert.That(strategy.Observations, Has.Count.EqualTo(1));
         Assert.That(strategy.Observations[0].Choice, Is.Not.SameAs(choice));
-        Assert.That(strategy.Observations[0].Choice.Operation, Is.SameAs(choice.Operation));
+        Assert.That(strategy.Observations[0].Choice.OperationId, Is.EqualTo(choice.OperationId));
         Assert.That(strategy.Observations[0].Effects, Has.Count.EqualTo(1));
         Assert.That(strategy.Observations[0].CompleteBehavior, Is.False);
         Assert.That(((AnnounceEffect)strategy.Observations[0].Effects[0]).AnnouncedEvent,

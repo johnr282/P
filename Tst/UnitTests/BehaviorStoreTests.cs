@@ -42,13 +42,13 @@ public class BehaviorStoreTests
         var e = new Event(new PInt(payload));
         return kind switch
         {
-            0 => new InitializeChoice(op, e),
-            1 => new ResumeInitializationChoice(op, e),
-            2 => new DeliverEventChoice(op, (e, new EventInfo(e))),
-            3 => new ResumeHandlerChoice(op, (e, new EventInfo(e))),
-            4 => new CompleteReceiveChoice(op, (e, null),
+            0 => new InitializeChoice(op.Id, op.StateMachine.Id, e),
+            1 => new ResumeInitializationChoice(op.Id, op.StateMachine.Id, e),
+            2 => new DeliverEventChoice(op.Id, op.StateMachine.Id, (e, new EventInfo(e))),
+            3 => new ResumeHandlerChoice(op.Id, op.StateMachine.Id, (e, new EventInfo(e))),
+            4 => new CompleteReceiveChoice(op.Id, op.StateMachine.Id, (e, null),
                 (new Event(new PInt(receivedPayload)), null), initializing),
-            _ => new RunTaskChoice(new TaskOperation(op.Id, null))
+            _ => new RunTaskChoice(op.Id)
         };
     }
 
@@ -124,11 +124,11 @@ public class BehaviorStoreTests
         using var runtime = NewRuntime();
         var op = Operation(runtime);
         var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>(), true);
-        node.AddBehavior(new InitializeChoice(op, new Event()), Array.Empty<ExecutionEffect>(), true);
-        Assert.That(node.Transitions.ContainsKey(new InitializeChoice(op, new Event())), Is.True);
-        Assert.That(node.Transitions.ContainsKey(new InitializeChoice(op, null)), Is.False);
+        node.AddBehavior(new InitializeChoice(op.Id, op.StateMachine.Id, new Event()), Array.Empty<ExecutionEffect>(), true);
+        Assert.That(node.Transitions.ContainsKey(new InitializeChoice(op.Id, op.StateMachine.Id, new Event())), Is.True);
+        Assert.That(node.Transitions.ContainsKey(new InitializeChoice(op.Id, op.StateMachine.Id, null)), Is.False);
         Assert.That(node.Transitions.ContainsKey(Choice(0, op)), Is.False);
-        Assert.That(node.Transitions.ContainsKey(new InitializeChoice(op, new OtherEvent())), Is.False);
+        Assert.That(node.Transitions.ContainsKey(new InitializeChoice(op.Id, op.StateMachine.Id, new OtherEvent())), Is.False);
     }
 
     [TestCase(0)]
@@ -145,11 +145,11 @@ public class BehaviorStoreTests
         var received = new Event(new PSeq(new IPValue[] { new PInt(2) }));
         SchedulingChoice MakeChoice() => kind switch
         {
-            0 => new InitializeChoice(op, e),
-            1 => new ResumeInitializationChoice(op, e),
-            2 => new DeliverEventChoice(op, (e, null)),
-            3 => new ResumeHandlerChoice(op, (e, null)),
-            _ => new CompleteReceiveChoice(op, (e, null), (received, null), true)
+            0 => new InitializeChoice(op.Id, op.StateMachine.Id, e),
+            1 => new ResumeInitializationChoice(op.Id, op.StateMachine.Id, e),
+            2 => new DeliverEventChoice(op.Id, op.StateMachine.Id, (e, null)),
+            3 => new ResumeHandlerChoice(op.Id, op.StateMachine.Id, (e, null)),
+            _ => new CompleteReceiveChoice(op.Id, op.StateMachine.Id, (e, null), (received, null), true)
         };
         var live = MakeChoice();
         var snapshot = live.Snapshot();
@@ -164,7 +164,8 @@ public class BehaviorStoreTests
 
         Assert.That(store.GetBehavior(new List<SchedulingChoice> { query }, out _, out _), Is.True);
         Assert.That(store.GetBehavior(new List<SchedulingChoice> { live }, out _, out _), Is.False);
-        Assert.That(snapshot.Operation, Is.SameAs(live.Operation));
+        Assert.That(snapshot.OperationId, Is.EqualTo(live.OperationId));
+        Assert.That(snapshot.GetStateMachineId(), Is.SameAs(live.GetStateMachineId()));
     }
 
     [Test]
@@ -205,10 +206,10 @@ public class BehaviorStoreTests
                 new VectorTime(sender));
             return kind switch
             {
-                0 => new DeliverEventChoice(receiver, (e, info)),
-                1 => new ResumeHandlerChoice(receiver, (e, info)),
-                2 => new CompleteReceiveChoice(receiver, (e, info), (e, null), false),
-                _ => new CompleteReceiveChoice(receiver, (e, null), (e, info), false)
+                0 => new DeliverEventChoice(receiver.Id, receiver.StateMachine.Id, (e, info)),
+                1 => new ResumeHandlerChoice(receiver.Id, receiver.StateMachine.Id, (e, info)),
+                2 => new CompleteReceiveChoice(receiver.Id, receiver.StateMachine.Id, (e, info), (e, null), false),
+                _ => new CompleteReceiveChoice(receiver.Id, receiver.StateMachine.Id, (e, null), (e, info), false)
             };
         }
         var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>(), true);
@@ -300,8 +301,8 @@ public class BehaviorStoreTests
         PMachineValue Reference(StateMachineId id) => new(id, new List<string>());
         var firstEvent = new Event(WrapReferences(kind, Reference(a1), Reference(b1), false));
         var secondEvent = new Event(WrapReferences(kind, Reference(a2), Reference(b2), false));
-        var first = new InitializeChoice(receiver1, firstEvent);
-        var second = new InitializeChoice(receiver2, secondEvent);
+        var first = new InitializeChoice(receiver1.Id, receiver1.StateMachine.Id, firstEvent);
+        var second = new InitializeChoice(receiver2.Id, receiver2.StateMachine.Id, secondEvent);
         var comparer = BehaviorStoreComparers.ChoiceEquality;
         Assert.That(a1.Value, Is.EqualTo(b2.Value));
         Assert.That(comparer.Equals(first, second), Is.True);
@@ -319,7 +320,7 @@ public class BehaviorStoreTests
         if (kind is 4 or 5)
         {
             var reorderedEvent = new Event(WrapReferences(kind, Reference(a2), Reference(b2), true));
-            var reorderedChoice = new InitializeChoice(receiver2, reorderedEvent);
+            var reorderedChoice = new InitializeChoice(receiver2.Id, receiver2.StateMachine.Id, reorderedEvent);
             Assert.That(comparer.Equals(first, reorderedChoice), Is.False);
             Assert.That(store.GetBehavior(new List<SchedulingChoice> { reorderedChoice }, out _, out _), Is.False);
             Assert.That(BehaviorStoreComparers.EffectEquality.Equals(effects[0],
@@ -328,7 +329,7 @@ public class BehaviorStoreTests
 
         var c2 = Operation(secondRuntime, path: Path(0, 2)).StateMachine.Id;
         var wrongEvent = new Event(WrapReferences(kind, Reference(b2), Reference(c2), true));
-        Assert.That(comparer.Equals(first, new InitializeChoice(receiver2, wrongEvent)), Is.False);
+        Assert.That(comparer.Equals(first, new InitializeChoice(receiver2.Id, receiver2.StateMachine.Id, wrongEvent)), Is.False);
     }
 
     private static IPValue CollectionPayload(bool map, params int[] order)
@@ -359,7 +360,7 @@ public class BehaviorStoreTests
                 { [new PInt(0)] = CollectionPayload(true, order) })
         };
         SchedulingChoice Input(params int[] order) =>
-            new InitializeChoice(op, new Event(Payload(order))).Snapshot();
+            new InitializeChoice(op.Id, op.StateMachine.Id, new Event(Payload(order))).Snapshot();
         ExecutionEffect Effect(params int[] order) =>
             new AnnounceEffect(op.StateMachine.Id, new Event(Payload(order)));
 
@@ -403,7 +404,7 @@ public class BehaviorStoreTests
         foreach (var order in permutations)
         {
             var e = new Event(CollectionPayload(map, order));
-            var choice = new InitializeChoice(op, e);
+            var choice = new InitializeChoice(op.Id, op.StateMachine.Id, e);
             var effect = new AnnounceEffect(op.StateMachine.Id, e);
             choiceHashes.Add(BehaviorStoreComparers.ChoiceEquality.GetHashCode(choice));
             effectHashes.Add(BehaviorStoreComparers.EffectEquality.GetHashCode(effect));
@@ -421,7 +422,7 @@ public class BehaviorStoreTests
         using var runtime = NewRuntime();
         var op = Operation(runtime);
         bool Same(IPValue x, IPValue y) => BehaviorStoreComparers.ChoiceEquality.Equals(
-            new InitializeChoice(op, new Event(x)), new InitializeChoice(op, new Event(y)));
+            new InitializeChoice(op.Id, op.StateMachine.Id, new Event(x)), new InitializeChoice(op.Id, op.StateMachine.Id, new Event(y)));
         Assert.That(Same(new PTuple(new PInt(1), new PInt(2)),
             new PTuple(new PInt(2), new PInt(1))), Is.False);
         Assert.That(Same(new PSeq(new IPValue[] { new PInt(1), new PInt(2) }),

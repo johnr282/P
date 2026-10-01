@@ -85,7 +85,7 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// The currently scheduled asynchronous operation.
         /// </summary>
-        internal AsyncOperation ScheduledOperation => LastSchedulingChoice.Operation;
+        internal AsyncOperation ScheduledOperation => OperationMap[LastSchedulingChoice.OperationId];
 
         /// <summary>
         /// Number of scheduled steps.
@@ -164,12 +164,12 @@ namespace PChecker.SystematicTesting
             CheckIfSchedulingStepsBoundIsReached();
 
             // Update the operation type.
-            LastSchedulingChoice.Operation.Type = type;
+            current.Type = type;
 
             if (CheckerConfiguration.IsProgramStateHashingEnabled)
             {
                 // Update the current operation with the hashed program state.
-                LastSchedulingChoice.Operation.HashedProgramState = Runtime.GetHashedProgramState();
+                current.HashedProgramState = Runtime.GetHashedProgramState();
             }
 
             if (!GetNextSchedulingChoice(out var nextChoice))
@@ -193,7 +193,7 @@ namespace PChecker.SystematicTesting
             HasPendingObservation = true;
             HandleEventDeliveryChoice(nextChoice);
 
-            var nextOp = nextChoice.Operation;
+            var nextOp = OperationMap[nextChoice.OperationId];
             // JR TODO: Need to record the choice, not only the operation
             ScheduleTrace.AddSchedulingChoice(nextOp.Id);
 
@@ -277,7 +277,7 @@ namespace PChecker.SystematicTesting
             {
                 if (op is TaskOperation taskOp)
                 {
-                    choices.Add(new RunTaskChoice(taskOp));
+                    choices.Add(new RunTaskChoice(taskOp.Id));
                 }
                 else if (op is StateMachineOperation machineOp)
                 {
@@ -303,7 +303,7 @@ namespace PChecker.SystematicTesting
 
             if (machine.IsInitializationPending)
             {
-                choices.Add(new InitializeChoice(machineOp, machine.InitialEvent));
+                choices.Add(new InitializeChoice(machineOp.Id, machineOp.StateMachine.Id, machine.InitialEvent));
             }
             else if (machine.IsInitializing || machine.IsEventHandlerInProgress)
             {
@@ -317,7 +317,7 @@ namespace PChecker.SystematicTesting
                     foreach (var e in receiveEvents)
                     {
                         choices.Add(new CompleteReceiveChoice(
-                            machineOp, eventToResume, e, machine.IsInitializing));
+                            machineOp.Id, machine.Id, eventToResume, e, machine.IsInitializing));
                     }
                 }
                 else
@@ -325,12 +325,12 @@ namespace PChecker.SystematicTesting
                     if (machine.IsInitializing)
                     {
                         choices.Add(new ResumeInitializationChoice(
-                            machineOp, machine.InitialEvent));
+                            machineOp.Id, machine.Id, machine.InitialEvent));
                     }
                     else
                     {
                         choices.Add(new ResumeHandlerChoice(
-                            machineOp, machine.InProgressEvent));
+                            machineOp.Id, machine.Id, machine.InProgressEvent));
                     }
                 }
             }
@@ -339,7 +339,7 @@ namespace PChecker.SystematicTesting
                 var enabledEvents = machine.GetEnabledEvents();
                 foreach (var e in enabledEvents)
                 {
-                    choices.Add(new DeliverEventChoice(machineOp, e));
+                    choices.Add(new DeliverEventChoice(machineOp.Id, machineOp.StateMachine.Id, e));
                 }
             }
 
@@ -364,7 +364,7 @@ namespace PChecker.SystematicTesting
             {
                 deliveredEvent = receiveChoice.EventToDeliver;
 
-                var machine = receiveChoice.Operation.StateMachine;
+                var machine = GetOperationWithId<StateMachineOperation>(receiveChoice.OperationId).StateMachine;
                 machine.CompleteReceive(receiveChoice.EventToDeliver);
             }
             else
@@ -455,7 +455,7 @@ namespace PChecker.SystematicTesting
             {
                 // Create an initial scheduling choice; first registered operation should
                 // always be a TaskOperation corresponding to the initial test task.
-                LastSchedulingChoice = new RunTaskChoice((TaskOperation)op);
+                LastSchedulingChoice = new RunTaskChoice(op.Id);
                 PendingObservationChoice = LastSchedulingChoice.Snapshot();
                 HasPendingObservation = true;
             }

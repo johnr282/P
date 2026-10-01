@@ -310,11 +310,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private static int StateMachineIdHash(StateMachineId id) =>
             id is null ? 0 : HashCode.Combine(id.CreationPath, id.Type);
 
-        private static bool SameAsyncOperation(AsyncOperation x, AsyncOperation y) =>
-            x.Id == y.Id;
-
-        private static int AsyncOperationHash(AsyncOperation op) => (int)op.Id;
-
         /// <summary>
         /// Compares choices by concrete operation identity and input values.
         /// Payloads must not change while their choices are stored as trie keys.
@@ -361,7 +356,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 {
                     // Choices do not have associated state machines, so simply
                     // compare operations
-                    return SameAsyncOperation(x.Operation, y.Operation);
+                    return x.OperationId == y.OperationId;
                 }
 
                 var xEvents = GetEventsFromChoice(x);
@@ -382,7 +377,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 if (choiceMachineId == null)
                 {
                     return HashCode.Combine(choice.GetType(),
-                        AsyncOperationHash(choice.Operation));
+                        choice.OperationId);
                 }
                 else
                 {
