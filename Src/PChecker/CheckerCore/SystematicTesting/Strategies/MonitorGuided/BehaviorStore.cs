@@ -169,19 +169,22 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         }
 
         /// <summary>
-        /// Attempts to find a recorded behavior corresponding to the given trace.
+        /// Attempts to find a recorded behavior corresponding to the given trace
+        /// and next choice.
         /// </summary>
         /// <returns>True if behavior was found, false if not.</returns>
         public bool GetBehavior(
-            List<SchedulingChoice> trace, 
+            IReadOnlyList<SchedulingChoice> trace, 
+            SchedulingChoice nextChoice, 
             out IReadOnlyList<ExecutionEffect> effects, 
             out bool completeBehavior)
         {
-            effects = new List<ExecutionEffect>();
+            effects = null;
             completeBehavior = false;
             var current = _root;
+            var nextTrace = trace.Append(nextChoice);
 
-            foreach (var choice in trace)
+            foreach (var choice in nextTrace)
             {
                 if (!current.Transitions.TryGetValue(choice, out var nextNode))
                 {

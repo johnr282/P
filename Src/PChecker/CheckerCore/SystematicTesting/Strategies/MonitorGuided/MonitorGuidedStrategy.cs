@@ -8,6 +8,7 @@ using PChecker.IO.Debugging;
 using PChecker.Runtime.Specifications;
 using PChecker.Runtime.StateMachines;
 using PChecker.SystematicTesting.Operations;
+using PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors;
 using Plang.Compiler.TypeChecker.AST.Declarations;
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided
@@ -23,13 +24,13 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private readonly Dictionary<MachineCreationPath, List<SchedulingChoice>> 
             _machineTraces = new();
 
-        private readonly Dictionary<MachineCreationPath, BehaviorStore> 
-            _behaviorStores = new();
+        private readonly IPredictor _predictor;
 
         public MonitorGuidedStrategy()
         {
-            // JR TODO: Add this to CheckerConfiguration
+            // JR TODO: Add these to CheckerConfiguration
             maxObservedEventsForMonitorExploration = 100;
+            _predictor = new ExactPredictor();
         }
 
         /// <summary>
@@ -156,22 +157,17 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             var creationPath = lastChoice.GetCreationPath();
             if (creationPath == null) return;
 
-            if (!_behaviorStores.TryGetValue(creationPath, out var behaviorStore))
-            {
-                behaviorStore = new BehaviorStore();
-                _behaviorStores[creationPath] = behaviorStore;
-            }
-
             if (!_machineTraces.TryGetValue(creationPath, out var machineTrace))
             {
                 machineTrace = new();
                 _machineTraces[creationPath] = machineTrace;
             }
 
-            behaviorStore.AddBehavior(
-                machineTrace, 
-                lastChoice, 
-                effects, 
+            _predictor.AddObservation(
+                creationPath,
+                machineTrace,
+                lastChoice,
+                effects,
                 completeBehavior);
             machineTrace.Add(lastChoice);
         }
