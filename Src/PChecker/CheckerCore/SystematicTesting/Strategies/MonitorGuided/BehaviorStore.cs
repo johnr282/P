@@ -115,15 +115,99 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
     {
         internal static readonly ChoiceComparer ChoiceEquality = new();
         internal static readonly EffectComparer EffectEquality = new();
+        private static readonly PayloadComparer PayloadEquality = new();
 
-        // Compare payloads using P value semantics rather than Event.Equals,
+        private sealed class PayloadComparer : IEqualityComparer<IPValue>
+        {
+            public bool Equals(IPValue x, IPValue y) => SamePValue(x, y);
+            public int GetHashCode(IPValue value) => PValueHash(value);
+        }
+
+        // Compare payloads using custom comparison for machine references
+        private static bool SamePValue(IPValue x, IPValue y)
+        {
+            if (ReferenceEquals(x, y)) return true;
+            if (x is null || y is null) return false;
+
+            return (x, y) switch
+            {
+                (PMachineValue a, PMachineValue b) => SameStateMachineId(a.Id, b.Id),
+                (PTuple a, PTuple b) =>
+                    a.fieldValues.SequenceEqual(b.fieldValues, PayloadEquality),
+                (PNamedTuple a, PNamedTuple b) =>
+                    a.fieldNames.SequenceEqual(b.fieldNames, StringComparer.Ordinal) &&
+                    a.fieldValues.SequenceEqual(b.fieldValues, PayloadEquality),
+                (PSeq a, PSeq b) => a.SequenceEqual(b, PayloadEquality),
+                (PSet a, PSet b) => 
+                    a.Count == b.Count &&
+                    new HashSet<IPValue>(a, PayloadEquality).SetEquals(b),
+                (PMap a, PMap b) => SameMap(a, b),
+                (Event a, Event b) => SameEvent(a, b),
+                // Primitive and foreign values retain their own value semantics.
+                _ => x.Equals(y)
+            };
+        }
+
+        private static bool SameMap(PMap x, PMap y)
+        {
+            if (x.Count != y.Count) return false;
+            var entries = new Dictionary<IPValue, IPValue>(PayloadEquality);
+            foreach (var entry in y) entries.Add(entry.Key, entry.Value);
+            return x.All(entry => 
+                entries.TryGetValue(entry.Key, out var value) &&
+                SamePValue(entry.Value, value));
+        }
+
+        private static int PValueHash(IPValue value) => value switch
+        {
+            null => 0,
+            PMachineValue machine => StateMachineIdHash(machine.Id),
+            PTuple tuple => OrderedHash(tuple.fieldValues),
+            PNamedTuple tuple => HashCode.Combine(
+                OrderedHash(tuple.fieldValues), NamedFieldsHash(tuple.fieldNames)),
+            PSeq sequence => OrderedHash(sequence),
+            PSet set => UnorderedHash(set.Select(PValueHash)),
+            PMap map => UnorderedHash(map.Select(entry =>
+                HashCode.Combine(PValueHash(entry.Key), PValueHash(entry.Value)))),
+            Event e => EventHash(e),
+            _ => value.GetHashCode()
+        };
+
+        private static int OrderedHash(IEnumerable<IPValue> values)
+        {
+            var hash = new HashCode();
+            foreach (var value in values) hash.Add(PValueHash(value));
+            return hash.ToHashCode();
+        }
+
+        private static int NamedFieldsHash(IEnumerable<string> names)
+        {
+            var hash = new HashCode();
+            foreach (var name in names) hash.Add(name, StringComparer.Ordinal);
+            return hash.ToHashCode();
+        }
+
+        private static int UnorderedHash(IEnumerable<int> hashes)
+        {
+            int sum = 0, count = 0;
+            foreach (var hash in hashes)
+            {
+                sum = unchecked(sum + hash);
+                count++;
+            }
+            return HashCode.Combine(count, sum);
+        }
+
+        // Compare events using both type and payload rather than Event.Equals,
         // which ignores payloads.
         private static bool SameEvent(Event x, Event y) =>
-            ReferenceEquals(x, y) || x != null && y != null &&
-            x.GetType() == y.GetType() && PValues.SafeEquals(x.Payload, y.Payload);
+            ReferenceEquals(x, y) || 
+            x != null && y != null &&
+            x.GetType() == y.GetType() && 
+            SamePValue(x.Payload, y.Payload);
 
         private static int EventHash(Event e) =>
-            e is null ? 0 : HashCode.Combine(e.GetType(), e.Payload);
+            e is null ? 0 : HashCode.Combine(e.GetType(), PValueHash(e.Payload));
 
         private static bool SameEventWithMetadata((Event e, EventInfo info) x,
             (Event e, EventInfo info) y) =>
@@ -137,13 +221,13 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 input.info?.OriginInfo?.SenderStateMachineId?.CreationPath);
 
         private static bool SameStateMachineId(StateMachineId x, StateMachineId y) =>
-            x.CreationPath.Equals(y.CreationPath) &&
+            ReferenceEquals(x, y) || 
+            x != null && y != null &&
+            object.Equals(x.CreationPath, y.CreationPath) &&
             StringComparer.Ordinal.Equals(x.Type, y.Type);
 
         private static int StateMachineIdHash(StateMachineId id) =>
-            HashCode.Combine(
-                id.CreationPath.GetHashCode(),
-                id.Type.GetHashCode());
+            id is null ? 0 : HashCode.Combine(id.CreationPath, id.Type);
 
         private static bool SameAsyncOperation(AsyncOperation x, AsyncOperation y) =>
             x.Id == y.Id;
@@ -216,7 +300,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 var choiceMachineId = choice.GetStateMachineId();
                 if (choiceMachineId == null)
                 {
-                    hash.Add(AsyncOperationHash(choice.Operation));
+                    return HashCode.Combine(choice.GetType(),
+                        AsyncOperationHash(choice.Operation));
                 }
                 else
                 {
@@ -224,11 +309,11 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 }
 
                 var inputs = GetEventsFromChoice(choice);
-                return HashCode.Combine(
-                    choice.GetType(), 
-                    EventWithMetadataHash(inputs.First),
-                    EventWithMetadataHash(inputs.Second), 
-                    inputs.InInitialization);
+                hash.Add(choice.GetType());
+                hash.Add(EventWithMetadataHash(inputs.First));
+                hash.Add(EventWithMetadataHash(inputs.Second));
+                hash.Add(inputs.InInitialization);
+                return hash.ToHashCode();
             }
         }
 

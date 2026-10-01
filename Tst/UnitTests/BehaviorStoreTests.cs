@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using NUnit.Framework;
 using PChecker.Configuration;
 using PChecker.Random;
@@ -16,16 +17,20 @@ namespace UnitTests;
 [TestFixture]
 public class BehaviorStoreTests
 {
+    private static readonly ConditionalWeakTable<ControlledRuntime, MachineCreationPathFactory>
+        PathFactories = new();
     private static ControlledRuntime NewRuntime()
     {
         var config = CheckerConfiguration.Create();
         return new ControlledRuntime(config, new RandomStrategy(10, new RandomValueGenerator(config)));
     }
 
-    private static StateMachineOperation Operation(ControlledRuntime runtime, string name = "Machine")
+    private static StateMachineOperation Operation(ControlledRuntime runtime, string name = "Machine",
+        MachineCreationPath path = null, Type type = null)
     {
         var machine = new TestMachine();
-        machine.Configure(runtime, new StateMachineId(typeof(TestMachine), name, null, runtime), null, null, null);
+        path ??= PathFactories.GetOrCreateValue(runtime).NewPath(null);
+        machine.Configure(runtime, new StateMachineId(type ?? typeof(TestMachine), name, path, runtime), null, null, null);
         return new StateMachineOperation(machine);
     }
 
@@ -80,7 +85,8 @@ public class BehaviorStoreTests
         Assert.That(node.Transitions.ContainsKey(Choice(4, op, initializing: true)), Is.False);
         Assert.That(node.Transitions.ContainsKey(Choice(2, op)), Is.False);
         Assert.That(node.Transitions.ContainsKey(Choice(4, Operation(runtime))), Is.False);
-        Assert.That(node.Transitions.ContainsKey(Choice(4, Operation(otherRuntime, "Other"))), Is.False);
+        Assert.That(node.Transitions.ContainsKey(Choice(4,
+            Operation(otherRuntime, type: typeof(OtherMachine)))), Is.False);
     }
 
     [Test]
@@ -209,7 +215,7 @@ public class BehaviorStoreTests
     }
 
     [Test]
-    public void CreationComparisonUsesRequestRatherThanAllocatedChildId()
+    public void CreationComparisonUsesChildPathTypeAndPayload()
     {
         using var runtime = NewRuntime();
         var creator = Operation(runtime);
@@ -225,17 +231,128 @@ public class BehaviorStoreTests
         node.AddBehavior(choice, new ExecutionEffect[] { recorded });
         payload.Add(new PInt(2));
 
-        CreateEffect Creation(StateMachineId parent, Type type, string name, int value) =>
-            new CreateEffect(parent, secondChild,
+        var equivalentChild = Operation(runtime, path: firstChild.CreationPath).StateMachine.Id;
+        var otherTypeChild = Operation(runtime, path: firstChild.CreationPath,
+            type: typeof(OtherMachine)).StateMachine.Id;
+        CreateEffect Creation(StateMachineId parent, StateMachineId child, int value) =>
+            new CreateEffect(parent, child,
                 new Event(new PSeq(new IPValue[] { new PInt(value) })));
         bool Matches(CreateEffect effect) => node.AddBehavior(choice, new ExecutionEffect[] { effect });
 
-        Assert.That(Matches(Creation(creator.StateMachine.Id, typeof(TestMachine), "Child", 1)), Is.True);
+        Assert.That(Matches(Creation(creator.StateMachine.Id, equivalentChild, 1)), Is.True);
         Assert.That(recorded.CreatedStateMachineId, Is.SameAs(firstChild));
-        Assert.That(Matches(Creation(creator.StateMachine.Id, typeof(TestMachine), "Child", 2)), Is.False);
-        Assert.That(Matches(Creation(creator.StateMachine.Id, typeof(TestMachine), "Other", 1)), Is.False);
-        Assert.That(Matches(Creation(creator.StateMachine.Id, typeof(OtherMachine), "Child", 1)), Is.False);
-        Assert.That(Matches(Creation(firstChild, typeof(TestMachine), "Child", 1)), Is.False);
+        Assert.That(Matches(Creation(creator.StateMachine.Id, equivalentChild, 2)), Is.False);
+        Assert.That(Matches(Creation(creator.StateMachine.Id, secondChild, 1)), Is.False);
+        Assert.That(Matches(Creation(creator.StateMachine.Id, otherTypeChild, 1)), Is.False);
+        Assert.That(Matches(Creation(firstChild, equivalentChild, 1)), Is.False);
+    }
+
+    private static MachineCreationPath Path(params uint[] parts) => new(parts);
+
+    private static IPValue WrapReferences(int kind, IPValue a, IPValue b, bool reverse)
+    {
+        var ordered = new IPValue[] { a, b };
+        switch (kind)
+        {
+            case 0: return a;
+            case 1: return new PTuple(ordered);
+            case 2: return new PNamedTuple(new[] { "first", "second" }, ordered);
+            case 3: return new PSeq(ordered);
+            case 4: return new PSet(new HashSet<IPValue>(reverse ? new[] { b, a } : ordered));
+            case 5:
+                var map = new Dictionary<IPValue, IPValue>();
+                if (reverse)
+                {
+                    map.Add(new PTuple(b, new PInt(1)), new PSeq(new[] { a }));
+                    map.Add(new PTuple(a, new PInt(1)), new PSeq(new[] { b }));
+                }
+                else
+                {
+                    map.Add(new PTuple(a, new PInt(1)), new PSeq(new[] { b }));
+                    map.Add(new PTuple(b, new PInt(1)), new PSeq(new[] { a }));
+                }
+                return new PMap(map);
+            default: return new PayloadEvent { Payload = new PTuple(ordered) };
+        }
+    }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
+    public void NestedMachinePayloadsMatchAcrossSwappedRuntimeIds(int kind)
+    {
+        using var firstRuntime = NewRuntime();
+        using var secondRuntime = NewRuntime();
+        var a1 = Operation(firstRuntime, path: Path(0, 0)).StateMachine.Id;
+        var b1 = Operation(firstRuntime, path: Path(0, 1)).StateMachine.Id;
+        var b2 = Operation(secondRuntime, path: Path(0, 1)).StateMachine.Id;
+        var a2 = Operation(secondRuntime, path: Path(0, 0)).StateMachine.Id;
+        var receiver1 = Operation(firstRuntime, path: Path(0));
+        Operation(secondRuntime); // Shift the receiver's runtime ID too.
+        var receiver2 = Operation(secondRuntime, path: Path(0));
+        PMachineValue Reference(StateMachineId id) => new(id, new List<string>());
+        var firstEvent = new Event(WrapReferences(kind, Reference(a1), Reference(b1), false));
+        var secondEvent = new Event(WrapReferences(kind, Reference(a2), Reference(b2), true));
+        var first = new InitializeChoice(receiver1, firstEvent);
+        var second = new InitializeChoice(receiver2, secondEvent);
+        var comparer = BehaviorStoreComparers.ChoiceEquality;
+        Assert.That(a1.Value, Is.EqualTo(b2.Value));
+        Assert.That(comparer.Equals(first, second), Is.True);
+        Assert.That(comparer.GetHashCode(first), Is.EqualTo(comparer.GetHashCode(second)));
+
+        var effects = new ExecutionEffect[] { new SendEffect(receiver1.StateMachine.Id, firstEvent, a1) };
+        var matchingEffects = new ExecutionEffect[] { new SendEffect(receiver2.StateMachine.Id, secondEvent, a2) };
+        var store = new BehaviorStore();
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), first, effects);
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { second }, out _), Is.True);
+        Assert.DoesNotThrow(() => store.AddBehavior(Array.Empty<SchedulingChoice>(), second, matchingEffects));
+        Assert.That(BehaviorStoreComparers.EffectEquality.GetHashCode(effects[0]),
+            Is.EqualTo(BehaviorStoreComparers.EffectEquality.GetHashCode(matchingEffects[0])));
+
+        var c2 = Operation(secondRuntime, path: Path(0, 2)).StateMachine.Id;
+        var wrongEvent = new Event(WrapReferences(kind, Reference(b2), Reference(c2), true));
+        Assert.That(comparer.Equals(first, new InitializeChoice(receiver2, wrongEvent)), Is.False);
+    }
+
+    [Test]
+    public void OrderedFieldsAndMapAssociationsRemainSignificant()
+    {
+        using var runtime = NewRuntime();
+        var op = Operation(runtime);
+        bool Same(IPValue x, IPValue y) => BehaviorStoreComparers.ChoiceEquality.Equals(
+            new InitializeChoice(op, new Event(x)), new InitializeChoice(op, new Event(y)));
+        Assert.That(Same(new PTuple(new PInt(1), new PInt(2)),
+            new PTuple(new PInt(2), new PInt(1))), Is.False);
+        Assert.That(Same(new PSeq(new IPValue[] { new PInt(1), new PInt(2) }),
+            new PSeq(new IPValue[] { new PInt(2), new PInt(1) })), Is.False);
+        Assert.That(Same(new PNamedTuple(new[] { "a", "b" }, new PInt(1), new PInt(2)),
+            new PNamedTuple(new[] { "b", "a" }, new PInt(1), new PInt(2))), Is.False);
+        Assert.That(Same(new PMap(new Dictionary<IPValue, IPValue> { [new PInt(1)] = new PInt(2) }),
+            new PMap(new Dictionary<IPValue, IPValue> { [new PInt(2)] = new PInt(1) })), Is.False);
+        Assert.That(Same(new PayloadEvent { Payload = new PInt(1) },
+            new PayloadEvent { Payload = new PInt(2) }), Is.False);
+    }
+
+    [Test]
+    public void NullEffectSourcesCompareAndHashConsistently()
+    {
+        using var runtime = NewRuntime();
+        var id = Operation(runtime).StateMachine.Id;
+        var first = new CreateEffect(null, id, null);
+        var second = new CreateEffect(null, id, null);
+        var comparer = BehaviorStoreComparers.EffectEquality;
+        Assert.That(comparer.Equals(first, second), Is.True);
+        Assert.That(comparer.GetHashCode(first), Is.EqualTo(comparer.GetHashCode(second)));
+        Assert.That(comparer.Equals(first, new CreateEffect(id, id, null)), Is.False);
+    }
+
+    private sealed class PayloadEvent : Event
+    {
+        public override IPValue Clone() => new PayloadEvent { Payload = Payload?.Clone() };
     }
 
     private sealed class OtherMachine : StateMachine { }
