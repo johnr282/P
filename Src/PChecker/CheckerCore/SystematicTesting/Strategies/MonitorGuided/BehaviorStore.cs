@@ -218,6 +218,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
             return (x, y) switch
             {
+                (PFloat a, PFloat b) => FloatBits(a) == FloatBits(b),
                 (PMachineValue a, PMachineValue b) => SameStateMachineId(a.Id, b.Id),
                 (PTuple a, PTuple b) =>
                     a.fieldValues.SequenceEqual(b.fieldValues, PayloadEquality),
@@ -228,10 +229,15 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 (PSet a, PSet b) => a.SequenceEqual(b, PayloadEquality),
                 (PMap a, PMap b) => SameMap(a, b),
                 (Event a, Event b) => SameEvent(a, b),
-                // Primitive and foreign values retain their own value semantics.
+                // Other primitive and foreign values retain their own value semantics.
                 _ => x.Equals(y)
             };
         }
+
+        // Behavior identity uses the exact floating-point representation: +0 and
+        // -0 have different reciprocals, while identical NaN representations must
+        // compare equal across observations. Hash the same bits for consistency.
+        private static long FloatBits(PFloat value) => BitConverter.DoubleToInt64Bits((double)value);
 
         private static bool SameMap(PMap x, PMap y)
         {
@@ -243,6 +249,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private static int PValueHash(IPValue value) => value switch
         {
             null => 0,
+            PFloat number => FloatBits(number).GetHashCode(),
             PMachineValue machine => StateMachineIdHash(machine.Id),
             PTuple tuple => OrderedHash(tuple.fieldValues),
             PNamedTuple tuple => HashCode.Combine(
@@ -292,23 +299,24 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
         private static bool SameEventWithMetadata((Event e, EventInfo info) x,
             (Event e, EventInfo info) y) =>
-            SameEvent(x.e, y.e) && object.Equals(
-                x.info?.OriginInfo?.SenderStateMachineId?.CreationPath,
-                y.info?.OriginInfo?.SenderStateMachineId?.CreationPath);
+            SameEvent(x.e, y.e) && SameStateMachineId(
+                x.info?.OriginInfo?.SenderStateMachineId,
+                y.info?.OriginInfo?.SenderStateMachineId);
 
         private static int EventWithMetadataHash((Event e, EventInfo info) input) =>
             HashCode.Combine(
                 EventHash(input.e),
-                input.info?.OriginInfo?.SenderStateMachineId?.CreationPath);
+                StateMachineIdHash(input.info?.OriginInfo?.SenderStateMachineId));
 
         private static bool SameStateMachineId(StateMachineId x, StateMachineId y) =>
             ReferenceEquals(x, y) || 
             x != null && y != null &&
             object.Equals(x.CreationPath, y.CreationPath) &&
-            StringComparer.Ordinal.Equals(x.Type, y.Type);
+            StringComparer.Ordinal.Equals(x.Type, y.Type) &&
+            StringComparer.Ordinal.Equals(x.InterfaceName, y.InterfaceName);
 
         private static int StateMachineIdHash(StateMachineId id) =>
-            id is null ? 0 : HashCode.Combine(id.CreationPath, id.Type);
+            id is null ? 0 : HashCode.Combine(id.CreationPath, id.Type, id.InterfaceName);
 
         /// <summary>
         /// Compares choices by concrete operation identity and input values.

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using NUnit.Framework;
 using PChecker.Configuration;
 using PChecker.Random;
+using PChecker.Runtime;
 using PChecker.Runtime.Events;
 using PChecker.Runtime.StateMachines;
 using PChecker.Runtime.Values;
@@ -181,6 +182,80 @@ public class ExecutionEffectNotificationTests
                 behaviorRecorder.PrepareForNextIteration();
             });
         }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    [NonParallelizable]
+    public async Task InterfaceBindingsKeepDifferentMonitorObservationsSeparate(bool monitoredFirst)
+    {
+        var originalMonitorMap = PModule.monitorMap;
+        var originalObserves = PModule.monitorObserves;
+        try
+        {
+            PModule.monitorMap = new()
+            {
+                ["I_Monitored"] = new() { typeof(FailingMonitor) },
+                ["I_Unmonitored"] = new()
+            };
+            PModule.monitorObserves = new() { [nameof(FailingMonitor)] = new() { nameof(Event) } };
+            var store = new BehaviorStore();
+            var recorder = new MonitorGuidedStrategy();
+            SchedulingChoice firstChoice = null;
+            // Revisit the first interface to verify reuse across fresh runtime IDs too.
+            foreach (var monitored in new[] { monitoredFirst, !monitoredFirst, monitoredFirst })
+            {
+                await Task.Run(async () =>
+                {
+                    var configuration = CheckerConfiguration.Create();
+                    var strategy = new RecordingStrategy(configuration, 100);
+                    using var runtime = new ControlledRuntime(configuration, strategy);
+                    runtime.TryCreateMonitor(typeof(FailingMonitor));
+                    var alias = monitored ? "Monitored" : "Unmonitored";
+                    runtime.RunTest((Action<ControlledRuntime>)(r =>
+                        r.CreateStateMachine(typeof(InterfaceAnnouncementMachine), alias)), "interface-binding");
+                    await runtime.WaitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+                    Assert.That(runtime.Scheduler.BugFound, Is.False, runtime.Scheduler.BugReport);
+                    var initializations = strategy.Observations.FindAll(o => o.Choice is InitializeChoice);
+                    Assert.That(initializations, Has.Count.EqualTo(1));
+                    var sample = initializations[0];
+                    Assert.That(sample.Choice.GetStateMachineId().InterfaceName, Is.EqualTo("I_" + alias));
+                    Assert.That(sample.CompleteBehavior, Is.True);
+                    Assert.That(sample.Effects, Has.Count.EqualTo(monitored ? 1 : 0));
+                    if (firstChoice != null && monitored != monitoredFirst)
+                    {
+                        Assert.That(sample.Choice.GetCreationPath(), Is.EqualTo(firstChoice.GetCreationPath()));
+                        Assert.That(BehaviorStoreComparers.ChoiceEquality.Equals(firstChoice, sample.Choice), Is.False);
+                        Assert.That(store.GetBehavior(new List<SchedulingChoice> { sample.Choice }, out _, out _), Is.False);
+                    }
+                    firstChoice ??= sample.Choice;
+                    store.AddBehavior(Array.Empty<SchedulingChoice>(), sample.Choice, sample.Effects, sample.CompleteBehavior);
+                    Assert.That(store.GetBehavior(new List<SchedulingChoice> { sample.Choice },
+                        out var effects, out var complete), Is.True);
+                    Assert.That(effects, Has.Count.EqualTo(monitored ? 1 : 0));
+                    Assert.That(complete, Is.True);
+                    foreach (var observation in strategy.Observations)
+                    {
+                        recorder.NotifyEffects(observation.Choice, observation.Effects, observation.CompleteBehavior);
+                    }
+                    recorder.PrepareForNextIteration();
+                });
+            }
+        }
+        finally
+        {
+            PModule.monitorMap = originalMonitorMap;
+            PModule.monitorObserves = originalObserves;
+        }
+    }
+
+    public sealed class InterfaceAnnouncementMachine : StateMachine
+    {
+        [Start]
+        [OnEntry(nameof(AnnounceThroughInterface))]
+        private sealed class Initial : State { }
+
+        private void AnnounceThroughInterface(Event e) => AnnounceInternal(new Event(new PInt(1)));
     }
 
     public sealed class ArmFailureEvent : Event { }

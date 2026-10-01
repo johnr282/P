@@ -410,7 +410,7 @@ namespace PChecker.SystematicTesting
             stateMachine.Configure(this, id, stateMachineManager, eventInbox, initialEvent);
             stateMachine.SetupEventHandlers();
             stateMachine.self = new PMachineValue(id, stateMachine.receives.ToList());
-            stateMachine.interfaceName = "I_" + name;
+            stateMachine.interfaceName = id.InterfaceName;
 
             if (CheckerConfiguration.ReportActivityCoverage)
             {

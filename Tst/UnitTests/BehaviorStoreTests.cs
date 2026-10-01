@@ -199,6 +199,11 @@ public class BehaviorStoreTests
         var receiver = Operation(runtime);
         var firstSender = Operation(runtime).StateMachine.Id;
         var secondSender = Operation(runtime).StateMachine.Id;
+        var equivalentSender = Operation(runtime, path: firstSender.CreationPath).StateMachine.Id;
+        var differentTypeSender = Operation(runtime, path: firstSender.CreationPath,
+            type: typeof(OtherMachine)).StateMachine.Id;
+        var differentInterfaceSender = Operation(runtime, name: "OtherInterface",
+            path: firstSender.CreationPath).StateMachine.Id;
         SchedulingChoice Input(StateMachineId sender, string senderState)
         {
             var e = new Event(new PInt(1));
@@ -216,6 +221,15 @@ public class BehaviorStoreTests
         node.AddBehavior(Input(firstSender, "Before"), Array.Empty<ExecutionEffect>(), true);
         Assert.That(node.Transitions.ContainsKey(Input(firstSender, "After")), Is.True);
         Assert.That(node.Transitions.ContainsKey(Input(secondSender, "Before")), Is.False);
+        Assert.That(node.Transitions.ContainsKey(Input(equivalentSender, "Before")), Is.True);
+        Assert.That(BehaviorStoreComparers.ChoiceEquality.GetHashCode(Input(firstSender, "Before")),
+            Is.EqualTo(BehaviorStoreComparers.ChoiceEquality.GetHashCode(Input(equivalentSender, "After"))));
+        Assert.That(BehaviorStoreComparers.ChoiceEquality.Equals(
+            Input(firstSender, "Before"), Input(differentTypeSender, "Before")), Is.False);
+        Assert.That(node.Transitions.ContainsKey(Input(differentTypeSender, "Before")), Is.False);
+        Assert.That(node.Transitions.ContainsKey(Input(differentInterfaceSender, "Before")), Is.False);
+        Assert.That(node.AddBehavior(Input(differentTypeSender, "Before"),
+            new ExecutionEffect[] { new AnnounceEffect(differentTypeSender, new Event(new PInt(7))) }, true), Is.True);
     }
 
     [Test]
@@ -446,6 +460,131 @@ public class BehaviorStoreTests
         Assert.That(comparer.Equals(first, second), Is.True);
         Assert.That(comparer.GetHashCode(first), Is.EqualTo(comparer.GetHashCode(second)));
         Assert.That(comparer.Equals(first, new CreateEffect(id, id, null)), Is.False);
+    }
+
+    [TestCase(double.NaN)]
+    [TestCase(double.PositiveInfinity)]
+    [TestCase(double.NegativeInfinity)]
+    [TestCase(0.0)]
+    [TestCase(-0.0)]
+    [TestCase(1.25)]
+    public void FloatingPointObservationsMatchAcrossSnapshots(double value)
+    {
+        using var runtime = NewRuntime();
+        var id = Operation(runtime).StateMachine.Id;
+        // Nest the float to verify recursive comparison and hashing as well.
+        Event Input() => new Event(new PTuple(new PFloat(value), new PInt(1)));
+        var first = new InitializeChoice(id.Value, id, Input()).Snapshot();
+        var second = new InitializeChoice(id.Value, id, Input()).Snapshot();
+        ExecutionEffect[] Effects() => new ExecutionEffect[] { new AnnounceEffect(id, Input()) };
+        var firstEffects = Effects();
+        var secondEffects = Effects();
+        Assert.That(BehaviorStoreComparers.ChoiceEquality.Equals(first, second), Is.True);
+        Assert.That(BehaviorStoreComparers.ChoiceEquality.GetHashCode(first),
+            Is.EqualTo(BehaviorStoreComparers.ChoiceEquality.GetHashCode(second)));
+        Assert.That(BehaviorStoreComparers.EffectEquality.Equals(firstEffects[0], secondEffects[0]), Is.True);
+        Assert.That(BehaviorStoreComparers.EffectEquality.GetHashCode(firstEffects[0]),
+            Is.EqualTo(BehaviorStoreComparers.EffectEquality.GetHashCode(secondEffects[0])));
+
+        var store = new BehaviorStore();
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), first, firstEffects, true);
+        Assert.DoesNotThrow(() => store.AddBehavior(Array.Empty<SchedulingChoice>(), second, secondEffects, true));
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { second }, out _, out var complete), Is.True);
+        Assert.That(complete, Is.True);
+    }
+
+    [Test]
+    public void SignedZerosHaveDistinctBehaviorKeysAndEffects()
+    {
+        using var runtime = NewRuntime();
+        var id = Operation(runtime).StateMachine.Id;
+        var positive = new PFloat(0.0);
+        var negative = new PFloat(BitConverter.Int64BitsToDouble(long.MinValue));
+        var forward = new InitializeChoice(id.Value, id, new Event(positive)).Snapshot();
+        var reverse = new InitializeChoice(id.Value, id, new Event(negative)).Snapshot();
+        var positiveEffect = new AnnounceEffect(id, new Event(new PFloat(1.0) / positive));
+        var negativeEffect = new AnnounceEffect(id, new Event(new PFloat(1.0) / negative));
+        Assert.That((double)(PFloat)positiveEffect.AnnouncedEvent.Payload, Is.EqualTo(double.PositiveInfinity));
+        Assert.That((double)(PFloat)negativeEffect.AnnouncedEvent.Payload, Is.EqualTo(double.NegativeInfinity));
+        Assert.That(BehaviorStoreComparers.ChoiceEquality.Equals(forward, reverse), Is.False);
+        Assert.That(BehaviorStoreComparers.EffectEquality.Equals(
+            new AnnounceEffect(id, new Event(positive)), new AnnounceEffect(id, new Event(negative))), Is.False);
+
+        var store = new BehaviorStore();
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), forward, new ExecutionEffect[] { positiveEffect }, true);
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { reverse }, out _, out _), Is.False);
+        store.AddBehavior(Array.Empty<SchedulingChoice>(), reverse, new ExecutionEffect[] { negativeEffect }, true);
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { forward }, out var effects, out _), Is.True);
+        Assert.That(effects[0], Is.SameAs(positiveEffect));
+        Assert.That(store.GetBehavior(new List<SchedulingChoice> { reverse }, out effects, out _), Is.True);
+        Assert.That(effects[0], Is.SameAs(negativeEffect));
+    }
+
+    [Test]
+    public void DistinctNaNRepresentationsRemainDistinct()
+    {
+        using var runtime = NewRuntime();
+        var id = Operation(runtime).StateMachine.Id;
+        var first = new PFloat(BitConverter.Int64BitsToDouble(0x7ff8000000000001L));
+        var second = new PFloat(BitConverter.Int64BitsToDouble(0x7ff8000000000002L));
+        Assert.That(double.IsNaN((double)first), Is.True);
+        Assert.That(double.IsNaN((double)second), Is.True);
+        Assert.That(BehaviorStoreComparers.ChoiceEquality.Equals(
+            new InitializeChoice(id.Value, id, new Event(first)),
+            new InitializeChoice(id.Value, id, new Event(second))), Is.False);
+    }
+
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(6)]
+    public void InterfaceBindingsDistinguishNestedMachineReferences(int kind)
+    {
+        using var runtime = NewRuntime();
+        var receiver = Operation(runtime);
+        var first = Operation(runtime, name: "First", path: Path(0, 0)).StateMachine.Id;
+        var equivalent = Operation(runtime, name: "First", path: Path(0, 0)).StateMachine.Id;
+        var different = Operation(runtime, name: "Second", path: Path(0, 0)).StateMachine.Id;
+        var other = Operation(runtime).StateMachine.Id;
+        SchedulingChoice Input(StateMachineId id) => new InitializeChoice(receiver.Id, receiver.StateMachine.Id,
+            new Event(WrapReferences(kind, new PMachineValue(id, new List<string>()),
+                new PMachineValue(other, new List<string>()), false))).Snapshot();
+
+        Assert.That(first.Value, Is.Not.EqualTo(equivalent.Value));
+        Assert.That(first.InterfaceName, Is.EqualTo("I_First"));
+        var comparer = BehaviorStoreComparers.ChoiceEquality;
+        Assert.That(comparer.Equals(Input(first), Input(equivalent)), Is.True);
+        Assert.That(comparer.GetHashCode(Input(first)), Is.EqualTo(comparer.GetHashCode(Input(equivalent))));
+        Assert.That(comparer.Equals(Input(first), Input(different)), Is.False);
+    }
+
+    [Test]
+    public void InterfaceBindingsDistinguishEffectSourcesDestinationsAndCreations()
+    {
+        using var runtime = NewRuntime();
+        var first = Operation(runtime, name: "First", path: Path(0)).StateMachine.Id;
+        var equivalent = Operation(runtime, name: "First", path: Path(0)).StateMachine.Id;
+        var different = Operation(runtime, name: "Second", path: Path(0)).StateMachine.Id;
+        var source = Operation(runtime).StateMachine.Id;
+        ExecutionEffect[] Effects(StateMachineId id) => new ExecutionEffect[]
+        {
+            new AnnounceEffect(id, new Event()),
+            new SendEffect(source, new Event(), id),
+            new CreateEffect(source, id, null)
+        };
+        var originals = Effects(first);
+        var matches = Effects(equivalent);
+        var mismatches = Effects(different);
+        var comparer = BehaviorStoreComparers.EffectEquality;
+        for (int i = 0; i < originals.Length; i++)
+        {
+            Assert.That(comparer.Equals(originals[i], matches[i]), Is.True);
+            Assert.That(comparer.GetHashCode(originals[i]), Is.EqualTo(comparer.GetHashCode(matches[i])));
+            Assert.That(comparer.Equals(originals[i], mismatches[i]), Is.False);
+        }
     }
 
     private static ExecutionEffect[] Announcements(params int[] payloads) =>

@@ -38,6 +38,13 @@ namespace PChecker.Runtime.StateMachines
         public readonly string Type;
 
         /// <summary>
+        /// Stable interface binding used by the runtime for monitor routing and
+        /// interface creation. Unlike Name, this contains no runtime operation id.
+        /// </summary>
+        [DataMember]
+        public readonly string InterfaceName;
+
+        /// <summary>
         /// Name used for logging.
         /// </summary>
         [DataMember]
@@ -56,6 +63,7 @@ namespace PChecker.Runtime.StateMachines
             ControlledRuntime runtime, bool useNameForHashing = false)
         {
             CreationPath = path;
+            InterfaceName = "I_" + name;
 
             if (useNameForHashing)
             {
