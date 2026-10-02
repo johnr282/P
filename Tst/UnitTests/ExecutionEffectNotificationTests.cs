@@ -226,11 +226,11 @@ public class ExecutionEffectNotificationTests
                     {
                         Assert.That(sample.Choice.GetCreationPath(), Is.EqualTo(firstChoice.GetCreationPath()));
                         Assert.That(BehaviorStoreComparers.ChoiceEquality.Equals(firstChoice, sample.Choice), Is.False);
-                        Assert.That(store.GetBehavior(new List<SchedulingChoice> { sample.Choice }, out _, out _), Is.False);
+                        Assert.That(store.GetBehavior(Array.Empty<SchedulingChoice>(), sample.Choice, out _, out _), Is.False);
                     }
                     firstChoice ??= sample.Choice;
                     store.AddBehavior(Array.Empty<SchedulingChoice>(), sample.Choice, sample.Effects, sample.CompleteBehavior);
-                    Assert.That(store.GetBehavior(new List<SchedulingChoice> { sample.Choice },
+                    Assert.That(store.GetBehavior(Array.Empty<SchedulingChoice>(), sample.Choice,
                         out var effects, out var complete), Is.True);
                     Assert.That(effects, Has.Count.EqualTo(monitored ? 1 : 0));
                     Assert.That(complete, Is.True);
