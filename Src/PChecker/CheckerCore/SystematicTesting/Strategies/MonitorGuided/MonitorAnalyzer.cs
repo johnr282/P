@@ -74,7 +74,10 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// <param name="currentStateName">
         /// Name of the current state of the runtime monitor state machine.
         /// </param>
-        /// <param name="guidance">Monitor guidance representing a family of violating executions.</param>
+        /// <param name="guidance">
+        /// Monitor guidance representing a family of violating executions. 
+        /// Set to null if false is returned.
+        /// </param>
         /// <returns>True if violating executions were found, false otherwise.</returns>
         internal bool GetMonitorGuidance(
             string currentStateName,

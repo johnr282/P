@@ -423,8 +423,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                             b.TargetStateMachineId) &&
                         SameEvent(a.SentEvent, b.SentEvent),
 
-                    (AnnounceEffect a, AnnounceEffect b) =>
-                        SameEvent(a.AnnouncedEvent, b.AnnouncedEvent),
+                    (MonitorObservationEffect a, MonitorObservationEffect b) =>
+                        SameEvent(a.ObservedEvent, b.ObservedEvent),
 
                     (CreateEffect a, CreateEffect b) =>
                         SameStateMachineId(a.CreatedStateMachineId, 
@@ -446,7 +446,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                         StateMachineIdHash(e.TargetStateMachineId), 
                         EventHash(e.SentEvent)),
 
-                    AnnounceEffect e => EventHash(e.AnnouncedEvent),
+                    MonitorObservationEffect e => EventHash(e.ObservedEvent),
 
                     CreateEffect e => HashCode.Combine(
                         StateMachineIdHash(e.CreatedStateMachineId),

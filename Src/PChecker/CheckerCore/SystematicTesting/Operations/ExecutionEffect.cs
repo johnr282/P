@@ -51,19 +51,22 @@ namespace PChecker.SystematicTesting.Operations
     }
 
     /// <summary>
-    /// Represents an event announce.
+    /// Represents an event observed by a monitor.
     /// </summary>
-    internal sealed class AnnounceEffect : ExecutionEffect
+    internal sealed class MonitorObservationEffect : ExecutionEffect
     { 
-        // Snapshot captured before monitors execute on the live announcement.
-        internal Event AnnouncedEvent { get; }
+        internal Event ObservedEvent { get; }
 
-        internal AnnounceEffect(
+        internal bool Ignored { get; }
+
+        internal MonitorObservationEffect(
             StateMachineId stateMachineId, 
-            Event announcedEvent)
+            Event announcedEvent,
+            bool ignored)
             : base(stateMachineId)
         {
-            AnnouncedEvent = announcedEvent?.Snapshot();
+            ObservedEvent = announcedEvent?.Snapshot();
+            Ignored = ignored;
         }
     }
 

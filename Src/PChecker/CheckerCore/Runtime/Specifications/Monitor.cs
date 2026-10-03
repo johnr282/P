@@ -365,7 +365,7 @@ namespace PChecker.Runtime.Specifications
         /// <summary>
         /// Checks if the specified event is ignored in the current monitor state.
         /// </summary>
-        private bool IsEventIgnoredInCurrentState(Event e)
+        internal bool IsEventIgnoredInCurrentState(Event e)
         {
             if (IgnoredEvents.Contains(e.GetType()) ||
                 IgnoredEvents.Contains(typeof(WildCardEvent)))

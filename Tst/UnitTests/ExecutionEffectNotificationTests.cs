@@ -48,7 +48,7 @@ public class ExecutionEffectNotificationTests
         Assert.That(strategy.Observations[0].Choice.OperationId, Is.EqualTo(choice.OperationId));
         Assert.That(strategy.Observations[0].Effects, Has.Count.EqualTo(1));
         Assert.That(strategy.Observations[0].CompleteBehavior, Is.False);
-        Assert.That(((AnnounceEffect)strategy.Observations[0].Effects[0]).AnnouncedEvent,
+        Assert.That(((MonitorObservationEffect)strategy.Observations[0].Effects[0]).ObservedEvent,
             Is.TypeOf<FailureEvent>().And.Not.SameAs(announcedEvent));
         Assert.That(runtime.Scheduler.WaitAsync().IsCompleted, Is.True);
         Assert.That(runtime.GetAndClearEffects(), Is.Empty);
@@ -145,7 +145,7 @@ public class ExecutionEffectNotificationTests
     [TestCase(true)]
     public async Task MonitorGuidedRecorderAcceptsInterruptedAndCompleteRunsInEitherOrder(bool interruptedFirst)
     {
-        var behaviorRecorder = new MonitorGuidedStrategy();
+        var behaviorRecorder = new MonitorGuidedStrategy(new RandomValueGenerator(CheckerConfiguration.Create()));
         foreach (var interrupt in new[] { interruptedFirst, !interruptedFirst })
         {
             // RunTest requires Task.CurrentId, which an await continuation need not retain.
@@ -171,7 +171,7 @@ public class ExecutionEffectNotificationTests
                 var observation = initializations[0];
                 Assert.That(observation.CompleteBehavior, Is.EqualTo(!interrupt));
                 Assert.That(observation.Effects, Has.Count.EqualTo(interrupt ? 1 : 2));
-                Assert.That(((PInt)((AnnounceEffect)observation.Effects[0]).AnnouncedEvent.Payload).Equals(new PInt(1)), Is.True);
+                Assert.That(((PInt)((MonitorObservationEffect)observation.Effects[0]).ObservedEvent.Payload).Equals(new PInt(1)), Is.True);
 
                 // Feed real scheduler observations through the strategy's persistent stores.
                 foreach (var recorded in strategy.Observations)
@@ -200,7 +200,7 @@ public class ExecutionEffectNotificationTests
             };
             PModule.monitorObserves = new() { [nameof(FailingMonitor)] = new() { nameof(Event) } };
             var store = new BehaviorStore();
-            var recorder = new MonitorGuidedStrategy();
+            var recorder = new MonitorGuidedStrategy(new RandomValueGenerator(CheckerConfiguration.Create()));
             SchedulingChoice firstChoice = null;
             // Revisit the first interface to verify reuse across fresh runtime IDs too.
             foreach (var monitored in new[] { monitoredFirst, !monitoredFirst, monitoredFirst })

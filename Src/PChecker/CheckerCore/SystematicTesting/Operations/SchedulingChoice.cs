@@ -92,6 +92,27 @@ namespace PChecker.SystematicTesting.Operations
         {
             StateMachineId = machineId;
         }
+
+        /// <summary>
+        /// Returns the event potentially sent to monitors when this choice is 
+        /// executed, or null if no event is sent.
+        /// </summary>
+        /// <returns></returns>
+        public Event GetMonitoredEvent()
+        {
+            return this switch
+            {
+                InitializeChoice => null,
+                ResumeInitializationChoice => null,
+                DeliverEventChoice deliver => deliver.EventToDeliver.e,
+                ResumeHandlerChoice => null,
+                CompleteReceiveChoice receive => receive.EventToDeliver.e,
+
+                _ => throw new NotSupportedException(
+                    $"Unsupported scheduling choice: {this.GetType()}")
+            };
+
+        }
     }
 
     /// <summary>

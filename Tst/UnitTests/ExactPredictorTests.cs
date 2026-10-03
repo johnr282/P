@@ -75,7 +75,7 @@ public class ExactPredictorTests
         var initial = new InitializeChoice(firstId.Value, firstId, null);
         var resume = new ResumeInitializationChoice(firstId.Value, firstId, null);
         var predictor = new ExactPredictor();
-        var expected = new ExecutionEffect[] { new AnnounceEffect(firstId, new Event(new PInt(7))) };
+        var expected = new ExecutionEffect[] { new MonitorObservationEffect(firstId, new Event(new PInt(7)), ignored: false) };
         predictor.AddObservation(firstId.CreationPath, Array.Empty<SchedulingChoice>(), initial,
             Array.Empty<ExecutionEffect>(), true);
         predictor.AddObservation(firstId.CreationPath, new[] { initial }, resume, expected, true);
@@ -100,11 +100,11 @@ public class ExactPredictorTests
         var id = MachineId(runtime);
         var choice = new InitializeChoice(id.Value, id, null);
         var predictor = new ExactPredictor();
-        var prefix = new ExecutionEffect[] { new AnnounceEffect(id, new Event(new PInt(1))) };
+        var prefix = new ExecutionEffect[] { new MonitorObservationEffect(id, new Event(new PInt(1)), ignored: false) };
         var full = new ExecutionEffect[]
         {
-            new AnnounceEffect(id, new Event(new PInt(1))),
-            new AnnounceEffect(id, new Event(new PInt(2)))
+            new MonitorObservationEffect(id, new Event(new PInt(1)), ignored: false),
+            new MonitorObservationEffect(id, new Event(new PInt(2)), ignored: false)
         };
         predictor.AddObservation(id.CreationPath, Array.Empty<SchedulingChoice>(), choice, prefix, false);
         Assert.That(predictor.PredictEffects(id.CreationPath, Array.Empty<SchedulingChoice>(), choice,

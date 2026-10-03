@@ -739,16 +739,15 @@ namespace PChecker.SystematicTesting
         /// </summary>
         internal void Monitor(Type type, Event e, StateMachineId senderId, string senderStateName)
         {
-            EffectsSinceLastSchedulingChoice.Add(new AnnounceEffect(senderId, e));
+            var monitor = Monitors.Where(m => m.GetType() == type).FirstOrDefault();
+            if (monitor == default)
+                return;
 
-            foreach (var monitor in Monitors)
-            {
-                if (monitor.GetType() == type)
-                {
-                    monitor.MonitorEvent(e, senderId?.Name, senderId?.Type, senderStateName);
-                    break;
-                }
-            }
+            EffectsSinceLastSchedulingChoice.Add(new MonitorObservationEffect(
+                senderId, 
+                e,
+                monitor.IsEventIgnoredInCurrentState(e)));
+            monitor.MonitorEvent(e, senderId?.Name, senderId?.Type, senderStateName);
         }
 
         /// <summary>
