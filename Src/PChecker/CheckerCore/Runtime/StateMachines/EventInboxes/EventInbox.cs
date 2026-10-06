@@ -204,52 +204,26 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
             StateMachineManager.OnRaiseEvent(e, info);
         }
 
-        /// <inheritdoc/>
-        public Task<Event> ReceiveEventAsync(Type eventType, Func<Event, bool> predicate = null)
-        {
-            var eventWaitTypes = new Dictionary<Type, Func<Event, bool>>
-            {
-                { eventType, predicate }
-            };
-
-            return ReceiveEventAsync(eventWaitTypes);
-        }
-
-        /// <inheritdoc/>
-        public Task<Event> ReceiveEventAsync(params Type[] eventTypes)
-        {
-            var eventWaitTypes = new Dictionary<Type, Func<Event, bool>>();
-            foreach (var type in eventTypes)
-            {
-                eventWaitTypes.Add(type, null);
-            }
-
-            return ReceiveEventAsync(eventWaitTypes);
-        }
-
-        /// <inheritdoc/>
-        public Task<Event> ReceiveEventAsync(params Tuple<Type, Func<Event, bool>>[] events)
-        {
-            var eventWaitTypes = new Dictionary<Type, Func<Event, bool>>();
-            foreach (var e in events)
-            {
-                eventWaitTypes.Add(e.Item1, e.Item2);
-            }
-
-            return ReceiveEventAsync(eventWaitTypes);
-        }
-
         /// <summary>
         /// Waits for an event to be enqueued.
         /// </summary>
-        private Task<Event> ReceiveEventAsync(Dictionary<Type, Func<Event, bool>> eventWaitTypes)
+        public Task<Event> ReceiveEventAsync(Dictionary<Type, Func<Event, bool>> eventWaitTypes)
         {
-            StateMachine.Runtime.NotifyReceiveCalled(StateMachine);
             IsReceivePending = true;
             ReceiveCompletionSource = new TaskCompletionSource<Event>();
             EventWaitTypes = eventWaitTypes;
             StateMachineManager.OnWaitEvent(EventWaitTypes.Keys);
             return ReceiveCompletionSource.Task;
+        }
+
+        /// <inheritdoc/>
+        public Dictionary<Type, Func<Event, bool>> GetReceivePredicates() =>
+            IsReceivePending ? EventWaitTypes : null;
+
+        /// <inheritdoc/>
+        public bool EventSatisfiesPendingReceive(Event e)
+        {
+            return IsReceivePending && IsWaitedEvent(e, EventWaitTypes);
         }
 
         /// <summary>
@@ -261,7 +235,7 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         /// <summary>
         /// Returns whether the specified event matches the specified event types and predicates.
         /// </summary>
-        protected static bool IsWaitedEvent(Event e, Dictionary<Type, Func<Event, bool>> eventWaitTypes)
+        public static bool IsWaitedEvent(Event e, Dictionary<Type, Func<Event, bool>> eventWaitTypes)
         {
             return eventWaitTypes.TryGetValue(e.GetType(), out var predicate) &&
                 (predicate is null || predicate(e));

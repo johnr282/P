@@ -48,8 +48,7 @@ namespace PChecker.SystematicTesting.Operations
             CompleteReceiveChoice c => 
                 new CompleteReceiveChoice(c.OperationId, c.StateMachineId,
                     SnapshotEventWithMetadata(c.EventToResume), 
-                    SnapshotEventWithMetadata(c.EventToDeliver), 
-                    c.InInitialization),
+                    SnapshotEventWithMetadata(c.EventToDeliver)),
             RunTaskChoice c => new RunTaskChoice(c.OperationId),
 
             _ => throw new NotSupportedException(
@@ -83,6 +82,10 @@ namespace PChecker.SystematicTesting.Operations
     /// </summary>
     internal abstract class StateMachineSchedulingChoice : SchedulingChoice
     {
+        /// <summary>
+        /// Id for the state machine that will be scheduled if this choice is
+        /// chosen.
+        /// </summary>
         public StateMachineId StateMachineId { get; }
 
         internal StateMachineSchedulingChoice(
@@ -135,9 +138,9 @@ namespace PChecker.SystematicTesting.Operations
         /// </summary>
         internal InitializeChoice(
             ulong operationId, 
-            StateMachineId machineId,
+            StateMachineId machineToInitializeId,
             Event initialEvent)
-            : base(operationId, machineId)
+            : base(operationId, machineToInitializeId)
         {
             InitialEvent = initialEvent;
         }
@@ -159,9 +162,9 @@ namespace PChecker.SystematicTesting.Operations
         /// </summary>
         internal ResumeInitializationChoice(
             ulong operationId, 
-            StateMachineId machineId,
+            StateMachineId machineToResumeId,
             Event initialEvent)
-            : base(operationId, machineId)
+            : base(operationId, machineToResumeId)
         {
             InitialEvent = initialEvent;
         }
@@ -183,9 +186,9 @@ namespace PChecker.SystematicTesting.Operations
         /// </summary>
         internal DeliverEventChoice(
             ulong operationId, 
-            StateMachineId machineId,
+            StateMachineId targetMachineId,
             (Event e, EventInfo info) eventToDeliver)
-            : base(operationId, machineId)
+            : base(operationId, targetMachineId)
         {
             EventToDeliver = eventToDeliver;
         }
@@ -206,9 +209,9 @@ namespace PChecker.SystematicTesting.Operations
         /// </summary>
         internal ResumeHandlerChoice(
             ulong operationId, 
-            StateMachineId machineId,
+            StateMachineId machineToResumeId,
             (Event e, EventInfo info) eventToResume)
-            : base(operationId, machineId)
+            : base(operationId, machineToResumeId)
         {
             EventToResume = eventToResume;
         }
@@ -230,23 +233,17 @@ namespace PChecker.SystematicTesting.Operations
         public (Event e, EventInfo info) EventToDeliver { get; }
 
         /// <summary>
-        /// True if receive occurred during initialization. 
-        /// </summary>
-        public bool InInitialization { get; }
-
-        /// <summary>
         /// Initializes a new instance of the <see cref="CompleteReceiveChoice"/> class.
         /// </summary>
         internal CompleteReceiveChoice(
-            ulong operationId, StateMachineId machineId,
+            ulong operationId, 
+            StateMachineId machineToReceiveId,
             (Event e, EventInfo info) eventToResume, 
-            (Event e, EventInfo info) eventToDeliver,
-            bool inInitialization)
-            : base(operationId, machineId)
+            (Event e, EventInfo info) eventToDeliver)
+            : base(operationId, machineToReceiveId)
         {
             EventToResume = eventToResume;
             EventToDeliver = eventToDeliver;
-            InInitialization = inInitialization;
         }
     }
 

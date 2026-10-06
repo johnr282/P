@@ -300,18 +300,15 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private static int EventHash(Event e) =>
             e is null ? 0 : HashCode.Combine(e.GetType(), PValueHash(e.Payload));
 
+        // Purposefully ignore EventInfo; cannot influence execution. 
         private static bool SameEventWithMetadata((Event e, EventInfo info) x,
             (Event e, EventInfo info) y) =>
-            SameEvent(x.e, y.e) && SameStateMachineId(
-                x.info?.OriginInfo?.SenderStateMachineId,
-                y.info?.OriginInfo?.SenderStateMachineId);
+            SameEvent(x.e, y.e);
 
-        private static int EventWithMetadataHash((Event e, EventInfo info) input) =>
-            HashCode.Combine(
-                EventHash(input.e),
-                StateMachineIdHash(input.info?.OriginInfo?.SenderStateMachineId));
+        private static int EventWithMetadataHash((Event e, EventInfo info) input) =>    
+            EventHash(input.e);
 
-        private static bool SameStateMachineId(StateMachineId x, StateMachineId y) =>
+        public static bool SameStateMachineId(StateMachineId x, StateMachineId y) =>
             ReferenceEquals(x, y) || 
             x != null && y != null &&
             object.Equals(x.CreationPath, y.CreationPath) &&
@@ -329,24 +326,22 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         {
             private sealed record ChoiceEvents(
                 (Event e, EventInfo info) First, 
-                (Event e, EventInfo info) Second, 
-                bool InInitialization);
+                (Event e, EventInfo info) Second);
 
             private static ChoiceEvents GetEventsFromChoice(SchedulingChoice choice) =>
                 choice switch
                 {
                     InitializeChoice c => 
-                        new ChoiceEvents((c.InitialEvent, null), default, false),
+                        new ChoiceEvents((c.InitialEvent, null), default),
                     ResumeInitializationChoice c => 
-                        new ChoiceEvents((c.InitialEvent, null), default, false),
+                        new ChoiceEvents((c.InitialEvent, null), default),
                     DeliverEventChoice c => 
-                        new ChoiceEvents(c.EventToDeliver, default, false),
+                        new ChoiceEvents(c.EventToDeliver, default),
                     ResumeHandlerChoice c => 
-                        new ChoiceEvents(c.EventToResume, default, false),
+                        new ChoiceEvents(c.EventToResume, default),
                     CompleteReceiveChoice c => new ChoiceEvents(
                         c.EventToResume,
-                        c.EventToDeliver,
-                        c.InInitialization),
+                        c.EventToDeliver),
 
                     _ => throw new NotSupportedException(
                         $"Unsupported scheduling choice: {choice.GetType()}")
@@ -374,8 +369,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 var yEvents = GetEventsFromChoice(y);
                 return SameStateMachineId(xId, yId) &&
                     SameEventWithMetadata(xEvents.First, yEvents.First) &&
-                    SameEventWithMetadata(xEvents.Second, yEvents.Second) &&
-                    xEvents.InInitialization == yEvents.InInitialization;
+                    SameEventWithMetadata(xEvents.Second, yEvents.Second);
             }
 
             public int GetHashCode(SchedulingChoice choice)
@@ -399,7 +393,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 hash.Add(choice.GetType());
                 hash.Add(EventWithMetadataHash(inputs.First));
                 hash.Add(EventWithMetadataHash(inputs.Second));
-                hash.Add(inputs.InInitialization);
                 return hash.ToHashCode();
             }
         }
@@ -430,6 +423,13 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                         SameStateMachineId(a.CreatedStateMachineId, 
                             b.CreatedStateMachineId) &&
                         SameEvent(a.InitialEvent, b.InitialEvent),
+
+                    (BlockOnReceiveEffect a, BlockOnReceiveEffect b) =>
+                        SameEvent(a.InProgressEvent.e, b.InProgressEvent.e),
+
+                    (CompleteHandlerEffect a, CompleteHandlerEffect b) =>
+                        SameEvent(a.EventOfCompletedHandler.e, 
+                            b.EventOfCompletedHandler.e),
 
                     _ => throw new NotSupportedException(
                         $"Unsupported execution effect: {x.GetType()}")

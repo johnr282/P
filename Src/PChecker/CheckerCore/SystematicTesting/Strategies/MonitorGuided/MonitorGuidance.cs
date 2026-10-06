@@ -1,6 +1,7 @@
 ﻿using PChecker.Runtime.Events;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solver;
+using Plang.Compiler.TypeChecker.AST.States;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,14 +14,33 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
     {
         public SymExpr ViolationCondition { get; set; }
 
-        public IReadOnlyList<SymEvent> ViolatingExecution { get; }
+        /// <summary>
+        /// At s = ViolatingExecution[i], the monitor was in state s.state and 
+        /// received event s.e.
+        /// </summary>
+        private IReadOnlyList<(SymEvent e, State state)> _violatingExecution;
 
-        internal MonitorGuidance(
-            IReadOnlyList<SymEvent> violatingExecution, 
+        public MonitorGuidance(
+            IReadOnlyList<(SymEvent e, State state)> violatingExecution, 
             SymExpr violationCondition)
         {
-            ViolatingExecution = violatingExecution;
+            _violatingExecution = violatingExecution;
             ViolationCondition = violationCondition;
+        }
+
+        public SymEvent GetNextViolatingEvent(int guidanceIndex)
+        {
+            return _violatingExecution[guidanceIndex].e;
+        }
+
+        public State GetCurrentMonitorState(int guidanceIndex)
+        {
+            return _violatingExecution[guidanceIndex].state;
+        }
+
+        public bool FinalGuidanceIndex(int guidanceIndex)
+        {
+            return guidanceIndex == _violatingExecution.Count - 1;
         }
     }
 }

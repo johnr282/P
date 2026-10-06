@@ -309,15 +309,13 @@ namespace PChecker.SystematicTesting
             {
                 if (machine.IsReceivePending)
                 {
-                    var eventToResume = machine.IsInitializing
-                        ? (machine.InitialEvent, null)
-                        : machine.InProgressEvent;
+                    var eventToResume = machine.InProgressEvent;
 
                     var receiveEvents = machine.GetEnabledEvents();
                     foreach (var e in receiveEvents)
                     {
                         choices.Add(new CompleteReceiveChoice(
-                            machineOp.Id, machine.Id, eventToResume, e, machine.IsInitializing));
+                            machineOp.Id, machine.Id, eventToResume, e));
                     }
                 }
                 else

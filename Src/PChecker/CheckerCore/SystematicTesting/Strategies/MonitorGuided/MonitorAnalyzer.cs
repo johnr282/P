@@ -19,6 +19,9 @@ using PChecker.Runtime.Values;
 using Plang.Compiler.TypeChecker.Types;
 using System.Collections.Immutable;
 
+using RuntimeEvent = PChecker.Runtime.Events.Event;
+using ASTEvent = Plang.Compiler.TypeChecker.AST.Declarations.Event;
+
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 {
@@ -169,7 +172,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                     // JR TODO: Create new stack frame for the handler, adding a symbolic
                     // payload local variable for the event parameter, and add
                     // it to nextState.CallStack
-                    Event eventType = handler.Key;
+                    ASTEvent eventType = handler.Key;
                     IStateAction handlerAction = handler.Value;
 
 
@@ -240,14 +243,15 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// </summary>
         private MonitorGuidance ComputeGuidance(ExplorationNode node)
         {
-            List<SymEvent> execution = new();
+            List<(SymEvent, State)> execution = new();
             var violationCondition = node.SymbolicState.PathCondition;
 
             while (node != null)
             {
                 if (node.TransitionEvent != null)
                 {
-                    execution.Add(node.TransitionEvent);
+                    execution.Add((node.TransitionEvent, 
+                        node.SymbolicState.CurrentState));
                 }
                 node = node.Parent;
             }
@@ -257,6 +261,15 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             // or monitor fields, they must be removed; violation condition should
             // only contain constraints over symbolic event payloads
             return new MonitorGuidance(execution, violationCondition);
+        }
+
+        /// <summary>
+        /// Returns whether the given event is observed by the monitor.
+        /// </summary>
+        internal bool IsEventObserved(RuntimeEvent e)
+        {
+            return _monitorAST.Observes.Events.Any(
+                ev => MonitorGuidedStrategy.EventTypeMatches(ev, e));
         }
 
         internal enum SearchStrategy

@@ -1,4 +1,5 @@
-﻿using PChecker.Runtime.Events;
+﻿using LanguageExt;
+using PChecker.Runtime.Events;
 using PChecker.Runtime.StateMachines;
 using System;
 using System.Collections.Generic;
@@ -35,18 +36,43 @@ namespace PChecker.SystematicTesting.Operations
     /// </summary>
     internal sealed class SendEffect : ExecutionEffect
     {
-        // Snapshot captured at send time, independent of subsequent receiver execution.
+        // Snapshot captured at send time, independent of potential mutation
+        // by receiver.
         internal Event SentEvent { get; }
         internal StateMachineId TargetStateMachineId { get; }
+
+        /// <summary>
+        /// Type of delivery to target available at send time. DeliveryType.Pending
+        /// indicates that target cannot currently receive the event.
+        /// </summary>
+        internal DeliveryType AvailableDeliveryType { get; }
+
+        /// <summary>
+        /// Event currently being handled by target at send time. If target is 
+        /// initializing, this will be the initial event. If no event is being
+        /// handled, this will be (null, null).
+        /// </summary>
+        internal (Event e, EventInfo info) TargetInProgressEvent { get; }
 
         internal SendEffect(
             StateMachineId stateMachineId, 
             Event sentEvent, 
-            StateMachineId targetStateMachineId)
+            StateMachineId targetStateMachineId,
+            DeliveryType availableDeliveryType,
+            (Event e, EventInfo info) targetInProgressEvent)
             : base(stateMachineId)
         {
             SentEvent = sentEvent?.Snapshot();
             TargetStateMachineId = targetStateMachineId;
+            AvailableDeliveryType = availableDeliveryType;
+            TargetInProgressEvent = targetInProgressEvent;
+        }
+
+        internal enum DeliveryType
+        {
+            DeliverEvent,
+            CompleteReceive,
+            Pending
         }
     }
 
@@ -56,7 +82,6 @@ namespace PChecker.SystematicTesting.Operations
     internal sealed class MonitorObservationEffect : ExecutionEffect
     { 
         internal Event ObservedEvent { get; }
-
         internal bool Ignored { get; }
 
         internal MonitorObservationEffect(
@@ -90,4 +115,42 @@ namespace PChecker.SystematicTesting.Operations
             InitialEvent = initialEvent?.Snapshot();
         }
     }
+
+    /// <summary>
+    /// Represents a machine becoming blocked on a receive.
+    /// </summary>
+    internal sealed class BlockOnReceiveEffect : ExecutionEffect
+    { 
+        internal (Event e, EventInfo info) InProgressEvent { get; }
+        internal IReadOnlyDictionary<Type, Func<Event, bool>> ReceivePredicates { get; }
+
+        internal BlockOnReceiveEffect(
+            StateMachineId receivingMachineId,
+            (Event e, EventInfo info) inProgressEvent,
+            Dictionary<Type, Func<Event, bool>> receivePredicates)
+            : base(receivingMachineId)
+        {
+            InProgressEvent = (inProgressEvent.e?.Snapshot(), inProgressEvent.info);
+            ReceivePredicates = new Dictionary<Type, Func<Event, bool>>(receivePredicates);
+        }
+    }
+
+    /// <summary>
+    /// Represents a machine completing an event handler. This includes completing
+    /// initialization.
+    /// </summary>
+    internal sealed class CompleteHandlerEffect : ExecutionEffect
+    { 
+        internal (Event e, EventInfo info) EventOfCompletedHandler { get; }
+
+        internal CompleteHandlerEffect(
+            StateMachineId completedMachineId,
+            (Event e, EventInfo info) eventOfCompletedHandler)
+            : base(completedMachineId)
+        {
+            EventOfCompletedHandler = (eventOfCompletedHandler.e?.Snapshot(), 
+                eventOfCompletedHandler.info);
+        }
+    }
+
 }

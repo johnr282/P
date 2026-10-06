@@ -1,15 +1,6 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
 using PChecker.Exceptions;
 using PChecker.IO.Debugging;
 using PChecker.Runtime.Events;
@@ -22,6 +13,17 @@ using PChecker.Runtime.StateMachines.Managers;
 using PChecker.Runtime.StateMachines.StateTransitions;
 using PChecker.Runtime.Values;
 using PChecker.SystematicTesting;
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Linq.Expressions;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using static Antlr4.Runtime.Atn.SemanticContext;
+using static PChecker.Runtime.BehavioralObserver;
 using EventInfo = PChecker.Runtime.Events.EventInfo;
 
 
@@ -112,7 +114,8 @@ namespace PChecker.Runtime.StateMachines
         private protected volatile Status CurrentStatus;
 
         /// <summary>
-        /// Event whose handler is currently executing; null if no handler is in progress.
+        /// Event whose handler is currently executing, including initializaion. 
+        /// (null, null) if no handler is in progress.
         /// </summary>
         internal (Event e, EventInfo info) InProgressEvent { get; private set; } = (null, null);
 
@@ -131,6 +134,13 @@ namespace PChecker.Runtime.StateMachines
         /// Whether this state machine has a pending receive.
         /// </summary>
         internal bool IsReceivePending => Inbox.IsReceivePending;
+
+        /// <summary>
+        /// Predicates for this machine's pending receive, or null if there is 
+        /// no pending receive.
+        /// </summary>
+        internal Dictionary<Type, Func<Event, bool>> PendingReceivePredicates => 
+            Inbox.GetReceivePredicates();
 
         /// <summary>
         /// Gets the name of the current state, if there is one.
@@ -495,12 +505,21 @@ namespace PChecker.Runtime.StateMachines
         internal async Task InitializeAsync()
         {
             CurrentStatus = Status.Initializing;
+            InProgressEvent = (InitialEvent, new EventInfo(InitialEvent));
 
-            // Invoke the custom initializer, if there is one.
-            await InvokeUserCallbackAsync(UserCallbackType.OnInitialize, InitialEvent);
+            try
+            {
+                // Invoke the custom initializer, if there is one.
+                await InvokeUserCallbackAsync(UserCallbackType.OnInitialize, InitialEvent);
 
-            // Execute the entry action of the start state, if there is one.
-            await ExecuteCurrentStateOnEntryAsync(InitialEvent);
+                // Execute the entry action of the start state, if there is one.
+                await ExecuteCurrentStateOnEntryAsync(InitialEvent);
+            }
+            finally
+            {
+                Runtime.NotifyHandlerCompleted(this, InProgressEvent);
+                InProgressEvent = (null, null);
+            }
 
             if (CurrentStatus is Status.Halting)
             {
@@ -599,9 +618,12 @@ namespace PChecker.Runtime.StateMachines
         /// <returns>The received event.</returns>
         public Task<Event> ReceiveEventAsync(Type eventType, Func<Event, bool> predicate = null)
         {
-            Assert(IsActive, "{0} invoked ReceiveEventAsync while halting.", Id);
-            Runtime.NotifyReceiveCalled(this);
-            return Inbox.ReceiveEventAsync(eventType, predicate);
+            var eventWaitTypes = new Dictionary<Type, Func<Event, bool>>
+            {
+                { eventType, predicate }
+            };
+
+            return ReceiveEventAsync(eventWaitTypes);
         }
         
         /// <summary>
@@ -611,9 +633,13 @@ namespace PChecker.Runtime.StateMachines
         /// <returns>The received event.</returns>
         public Task<Event> ReceiveEventAsync(params Type[] eventTypes)
         {
-            Assert(IsActive, "{0} invoked ReceiveEventAsync while halting.", Id);
-            Runtime.NotifyReceiveCalled(this);
-            return Inbox.ReceiveEventAsync(eventTypes);
+            var eventWaitTypes = new Dictionary<Type, Func<Event, bool>>();
+            foreach (var type in eventTypes)
+            {
+                eventWaitTypes.Add(type, null);
+            }
+
+            return ReceiveEventAsync(eventWaitTypes);
         }
         
         /// <summary>
@@ -624,11 +650,28 @@ namespace PChecker.Runtime.StateMachines
         /// <returns>The received event.</returns>
         public Task<Event> ReceiveEventAsync(params Tuple<Type, Func<Event, bool>>[] events)
         {
-            Assert(IsActive, "{0} invoked ReceiveEventAsync while halting.", Id);
-            Runtime.NotifyReceiveCalled(this);
-            return Inbox.ReceiveEventAsync(events);
+            var eventWaitTypes = new Dictionary<Type, Func<Event, bool>>();
+            foreach (var e in events)
+            {
+                eventWaitTypes.Add(e.Item1, e.Item2);
+            }
+
+            return ReceiveEventAsync(eventWaitTypes);
         }
-        
+
+        private Task<Event> ReceiveEventAsync(Dictionary<Type, Func<Event, bool>> eventWaitTypes)
+        {
+            Assert(IsActive, "{0} invoked ReceiveEventAsync while halting.", Id);
+            Runtime.NotifyReceiveCalled(this, eventWaitTypes);
+            return Inbox.ReceiveEventAsync(eventWaitTypes);
+        }
+
+        /// <summary>
+        /// Returns whether the given event satisfies this machine's pending 
+        /// receive. If no receive is pending, returns false.
+        /// </summary>
+        internal bool EventSatisfiesPendingReceive(Event e) => Inbox.EventSatisfiesPendingReceive(e);
+
         /// <summary>
         /// Runs the event handler. The handler terminates if there is no next
         /// event to process or if the state machine has halted.
@@ -697,6 +740,7 @@ namespace PChecker.Runtime.StateMachines
                     }
                     finally
                     {
+                        Runtime.NotifyHandlerCompleted(this, nextEvent);
                         InProgressEvent = (null, null);
                     }
                 }

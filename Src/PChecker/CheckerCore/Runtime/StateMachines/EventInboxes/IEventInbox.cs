@@ -61,19 +61,22 @@ namespace PChecker.Runtime.StateMachines.EventInboxes
         void RaiseEvent(Event e);
 
         /// <summary>
-        /// Waits to receive an event of the specified type that satisfies an optional predicate.
-        /// </summary>
-        Task<Event> ReceiveEventAsync(Type eventType, Func<Event, bool> predicate = null);
-
-        /// <summary>
-        /// Waits to receive an event of the specified types.
-        /// </summary>
-        Task<Event> ReceiveEventAsync(params Type[] eventTypes);
-
-        /// <summary>
         /// Waits to receive an event of the specified types that satisfy the specified predicates.
         /// </summary>
-        Task<Event> ReceiveEventAsync(params Tuple<Type, Func<Event, bool>>[] events);
+        Task<Event> ReceiveEventAsync(Dictionary<Type, Func<Event, bool>> eventWaitTypes);
+
+        /// <summary>
+        /// Returns a dictionary from types to predicates representing the events
+        /// that will satisfy a pending receive. If no receive is pending, returns
+        /// null.
+        /// </summary>
+        Dictionary<Type, Func<Event, bool>> GetReceivePredicates();
+
+        /// <summary>
+        /// Returns whether the given event satisfies the pending receive. If no
+        /// receive is pending, returns false.
+        /// </summary>
+        bool EventSatisfiesPendingReceive(Event e);
 
         /// <summary>
         /// Notifies inbox that its state machine's pending receive has completed with 

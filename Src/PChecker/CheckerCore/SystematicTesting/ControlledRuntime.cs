@@ -543,8 +543,25 @@ namespace PChecker.SystematicTesting
             Scheduler.ScheduleNextEnabledOperation(AsyncOperationType.Send);
             ResetProgramCounter(sender);
 
-            EffectsSinceLastSchedulingChoice.Add(
-                new SendEffect(sender?.Id, e, targetId));
+            SendEffect.DeliveryType deliveryType;
+
+            if (target.IsEventHandlerInProgress || target.IsInitializing)
+            {
+                deliveryType = target.EventSatisfiesPendingReceive(e) 
+                    ? SendEffect.DeliveryType.CompleteReceive 
+                    : SendEffect.DeliveryType.Pending;
+            }
+            else
+            {
+                deliveryType = SendEffect.DeliveryType.DeliverEvent;
+            }
+
+            EffectsSinceLastSchedulingChoice.Add(new SendEffect(
+                sender?.Id, 
+                e, 
+                targetId, 
+                deliveryType, 
+                target.InProgressEvent));
 
             if (target.IsHalted)
             {
@@ -987,6 +1004,16 @@ namespace PChecker.SystematicTesting
         }
 
         /// <summary>
+        /// Notifies that a state machine finished handling event e.
+        /// </summary>
+        internal void NotifyHandlerCompleted(StateMachine stateMachine, 
+            (Event e, EventInfo info) handledEvent)
+        {
+            EffectsSinceLastSchedulingChoice.Add(new CompleteHandlerEffect(
+                stateMachine.Id, handledEvent));
+        }
+
+        /// <summary>
         /// Notifies that a state machine dequeued an <see cref="Event"/>.
         /// </summary>
         internal void NotifyDequeuedEvent(StateMachine stateMachine, Event e, EventInfo eventInfo)
@@ -1017,9 +1044,15 @@ namespace PChecker.SystematicTesting
         /// Notifies that a state machine called <see cref="StateMachine.ReceiveEventAsync(Type[])"/>
         /// or one of its overloaded methods.
         /// </summary>
-        internal void NotifyReceiveCalled(StateMachine stateMachine)
+        internal void NotifyReceiveCalled(StateMachine stateMachine,
+            Dictionary<Type, Func<Event, bool>> eventWaitTypes)
         {
             AssertExpectedCallerStateMachine(stateMachine, "ReceiveEventAsync");
+
+            EffectsSinceLastSchedulingChoice.Add(new BlockOnReceiveEffect(
+                stateMachine.Id,
+                stateMachine.InProgressEvent,
+                eventWaitTypes));
         }
 
         /// <summary>
