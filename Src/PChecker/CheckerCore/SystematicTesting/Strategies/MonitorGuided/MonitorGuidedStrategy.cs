@@ -113,7 +113,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
             if (_guidance == null || !_guidance.Valid)
             {
-                bool monitorViolationFound = _monitorAnalyzer.GetMonitorGuidance(
+                bool monitorViolationFound = _monitorAnalyzer.GetLeaderMonitorGuidance(
                     _monitor.CurrentStateName,
                     out _guidance);
 

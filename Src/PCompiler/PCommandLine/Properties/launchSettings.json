@@ -5,15 +5,20 @@
       "commandLineArgs": "compile",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
     },
-    "P Check": {
-      "commandName": "Project",
-      "commandLineArgs": "check -tc tcMajorityElection1 -s 100 -ms 1000 --inbox-type eventset",
-      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
-    },
     "RegressionTest": {
       "commandName": "Project",
       "commandLineArgs": "check net8.0/receive11.dll -tc DefaultImpl -s 4 --max-steps 1000 --seed 3243406786 -v -o PCheckerOutput",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\P\\Tst\\temp_builds\\PChecker\\RegressionTests\\Feature2Stmts\\Correct\\receive11\\PChecker"
+    },
+    "P Check Random": {
+      "commandName": "Project",
+      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 -s 100 -ms 1000 --inbox-type eventset --sch-random",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
+    },
+    "P Check MonitorGuided": {
+      "commandName": "Project",
+      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 -s 100 -ms 1000 --inbox-type eventset --sch-monitorguided",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
     }
   }
 }

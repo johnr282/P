@@ -37,6 +37,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
         private ExplorationNode _violatingNode = null;
 
+        private readonly SymbolFactory _symbolFactory = new();
+
         /// <summary>
         /// Constructs a new instance of the <see cref="MonitorAnalyzer"/> class."/>
         /// </summary>
@@ -110,6 +112,127 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             }
 
             guidance = ComputeGuidance(_violatingNode);
+            return true;
+        }
+
+        /// <summary>
+        /// Returns hard-coded guidance for OneLeaderPerElection monitor
+        /// </summary>
+        /// <param name="currentStateName"></param>
+        /// <param name="guidance"></param>
+        /// <returns></returns>
+        internal bool GetLeaderMonitorGuidance(
+            string currentStateName,
+            out MonitorGuidance guidance)
+        {
+            const string startStateName = "NoLeaderChosen";
+            const string leaderChosenStateName = "LeaderChosen";
+            const string chosenLeaderFieldName = "chosenLeader";
+            const string leaderFieldName = "leader";
+
+            guidance = null;
+
+            if (_monitorAST.Observes?.Events == null)
+            {
+                throw new PInternalException(
+                    $"Monitor '{_monitorAST.Name}' does not declare observed events.");
+            }
+
+            var observedEvents = _monitorAST.Observes.Events.ToList();
+            if (observedEvents.Count != 1 || observedEvents[0].Name != "eLeaderChosen")
+            {
+                throw new PInternalException(
+                    $"Fake leader-election guidance requires the monitor to observe only eLeaderChosen; " +
+                    $"monitor '{_monitorAST.Name}' observes: {string.Join(", ", observedEvents.Select(e => e.Name))}.");
+            }
+
+            var eLeaderChosen = observedEvents[0];
+            if (eLeaderChosen.PayloadType.Canonicalize() is not NamedTupleType payloadType ||
+                !payloadType.LookupEntry(leaderFieldName, out var leaderEntry) ||
+                !leaderEntry.Type.IsSameTypeAs(PrimitiveType.Int))
+            {
+                throw new PInternalException(
+                    "Fake leader-election guidance requires eLeaderChosen to have an integer 'leader' payload field.");
+            }
+
+            var startState = _monitorAST.GetState(startStateName);
+            var leaderChosenState = _monitorAST.GetState(leaderChosenStateName);
+            if (startState == null || leaderChosenState == null)
+            {
+                throw new PInternalException(
+                    $"Fake leader-election guidance requires states '{startStateName}' and '{leaderChosenStateName}'.");
+            }
+
+            var chosenLeaderField = _monitorAST.Fields.SingleOrDefault(
+                field => field.Name == chosenLeaderFieldName);
+            if (chosenLeaderField == null ||
+                !chosenLeaderField.Type.IsSameTypeAs(PrimitiveType.Int))
+            {
+                throw new PInternalException(
+                    $"Fake leader-election guidance requires integer monitor field '{chosenLeaderFieldName}'.");
+            }
+
+            if (!startState.AllEventHandlers.Any(handler => handler.Key.Name == eLeaderChosen.Name) ||
+                !leaderChosenState.AllEventHandlers.Any(handler => handler.Key.Name == eLeaderChosen.Name))
+            {
+                throw new PInternalException(
+                    "Fake leader-election guidance requires eLeaderChosen handlers in both monitor states.");
+            }
+
+            SymEvent CreateELeaderChosen() => new(
+                eLeaderChosen,
+                _symbolFactory.CreateFresh(eLeaderChosen.PayloadType));
+
+            SymExpr GetLeader(SymEvent e)
+            {
+                if (e.Payload is not NamedTupleExpr payload ||
+                    !payload.Fields.TryGetValue(leaderFieldName, out var leader))
+                {
+                    throw new PInternalException(
+                        "Could not retrieve the 'leader' field from the symbolic eLeaderChosen payload.");
+                }
+
+                return leader;
+            }
+
+            List<(SymEvent e, State state)> violatingExecution = new();
+            SymExpr violatingCondition;
+
+            if (currentStateName == startStateName)
+            {
+                SymEvent first = CreateELeaderChosen();
+                SymEvent second = CreateELeaderChosen();
+                violatingExecution.Add((first, startState));
+                violatingExecution.Add((second, leaderChosenState));
+
+                violatingCondition = SymExprFactory.Not(SymExprFactory.Equal(
+                    GetLeader(first), GetLeader(second)));
+            }
+            else if (currentStateName == leaderChosenStateName)
+            {
+                SymEvent second = CreateELeaderChosen();
+                violatingExecution.Add((second, leaderChosenState));
+
+                var fields = _fieldProvider.GetFieldValues();
+                if (!fields.TryGetValue(chosenLeaderFieldName, out var chosenLeaderValue) ||
+                    chosenLeaderValue == null)
+                {
+                    throw new PInternalException(
+                        $"Missing concrete value for monitor field '{chosenLeaderFieldName}'.");
+                }
+
+                var chosenLeaderExpr = new ConcreteExpr(chosenLeaderValue, chosenLeaderField.Type);
+                violatingCondition = SymExprFactory.Not(SymExprFactory.Equal(
+                    chosenLeaderExpr, GetLeader(second)));
+            }
+            else
+            {
+                throw new PInternalException(
+                    $"Unexpected current state '{currentStateName}' for fake leader-election guidance. " +
+                    $"Expected '{startStateName}' or '{leaderChosenStateName}'.");
+            }
+
+            guidance = new(violatingExecution, violatingCondition);
             return true;
         }
 

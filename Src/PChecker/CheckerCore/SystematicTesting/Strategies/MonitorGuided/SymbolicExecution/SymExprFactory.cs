@@ -14,6 +14,16 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
     {
         internal static SymExpr True => new ConcreteExpr((PBool)true, PrimitiveType.Bool);
 
+        internal static SymExpr Not(SymExpr expr)
+        {
+            if (!expr.Type.IsSameTypeAs(PrimitiveType.Bool))
+            {
+                throw new ArgumentException(
+                    $"Operand must be of boolean type. Type: {expr.Type}");
+            }
+            return new UnaryExpr(UnaryOpType.Not, expr, PrimitiveType.Bool);
+        }
+
         internal static SymExpr And(SymExpr left, SymExpr right)
         {
             if (!left.Type.IsSameTypeAs(PrimitiveType.Bool) ||
