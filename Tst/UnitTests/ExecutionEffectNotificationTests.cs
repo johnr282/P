@@ -12,6 +12,7 @@ using PChecker.Exceptions;
 using ControlledRuntime = PChecker.SystematicTesting.ControlledRuntime;
 using PChecker.SystematicTesting.Operations;
 using PChecker.SystematicTesting.Strategies.MonitorGuided;
+using PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
 using Monitor = PChecker.Runtime.Specifications.Monitor;
 
@@ -143,9 +144,10 @@ public class ExecutionEffectNotificationTests
 
     [TestCase(false)]
     [TestCase(true)]
-    public async Task MonitorGuidedRecorderAcceptsInterruptedAndCompleteRunsInEitherOrder(bool interruptedFirst)
+    public async Task ExactPredictorAcceptsInterruptedAndCompleteRunsInEitherOrder(bool interruptedFirst)
     {
-        var behaviorRecorder = new MonitorGuidedStrategy(new RandomValueGenerator(CheckerConfiguration.Create()));
+        var predictor = new ExactPredictor();
+        SchedulingChoice recordedChoice = null;
         foreach (var interrupt in new[] { interruptedFirst, !interruptedFirst })
         {
             // RunTest requires Task.CurrentId, which an await continuation need not retain.
@@ -170,18 +172,38 @@ public class ExecutionEffectNotificationTests
                 Assert.That(initializations, Has.Count.EqualTo(1), "The final segment must be reported exactly once.");
                 var observation = initializations[0];
                 Assert.That(observation.CompleteBehavior, Is.EqualTo(!interrupt));
-                Assert.That(observation.Effects, Has.Count.EqualTo(interrupt ? 1 : 2));
+                Assert.That(observation.Effects, Has.Count.EqualTo(interrupt ? 1 : 3));
                 Assert.That(((PInt)((MonitorObservationEffect)observation.Effects[0]).ObservedEvent.Payload).Equals(new PInt(1)), Is.True);
 
-                // Feed real scheduler observations through the strategy's persistent stores.
+                // Record the runtime observations directly in the predictor.
                 foreach (var recorded in strategy.Observations)
                 {
-                    Assert.DoesNotThrow(() => behaviorRecorder.NotifyEffects(
-                        recorded.Choice, recorded.Effects, recorded.CompleteBehavior));
+                    var creationPath = recorded.Choice.GetCreationPath();
+                    if (creationPath == null)
+                    {
+                        continue;
+                    }
+
+                    recordedChoice ??= recorded.Choice;
+                    Assert.DoesNotThrow(() => predictor.AddObservation(
+                        creationPath,
+                        Array.Empty<SchedulingChoice>(),
+                        recorded.Choice,
+                        recorded.Effects,
+                        recorded.CompleteBehavior));
                 }
-                behaviorRecorder.PrepareForNextIteration();
             });
         }
+
+        Assert.That(predictor.PredictEffects(
+            recordedChoice.GetCreationPath(),
+            Array.Empty<SchedulingChoice>(),
+            recordedChoice,
+            out var predictedEffects), Is.True);
+        Assert.That(predictedEffects, Has.Count.EqualTo(3));
+        Assert.That(predictedEffects[0], Is.TypeOf<MonitorObservationEffect>());
+        Assert.That(predictedEffects[1], Is.TypeOf<MonitorObservationEffect>());
+        Assert.That(predictedEffects[2], Is.TypeOf<CompleteHandlerEffect>());
     }
 
     [TestCase(false)]
@@ -200,7 +222,6 @@ public class ExecutionEffectNotificationTests
             };
             PModule.monitorObserves = new() { [nameof(FailingMonitor)] = new() { nameof(Event) } };
             var store = new BehaviorStore();
-            var recorder = new MonitorGuidedStrategy(new RandomValueGenerator(CheckerConfiguration.Create()));
             SchedulingChoice firstChoice = null;
             // Revisit the first interface to verify reuse across fresh runtime IDs too.
             foreach (var monitored in new[] { monitoredFirst, !monitoredFirst, monitoredFirst })
@@ -221,7 +242,10 @@ public class ExecutionEffectNotificationTests
                     var sample = initializations[0];
                     Assert.That(sample.Choice.GetStateMachineId().InterfaceName, Is.EqualTo("I_" + alias));
                     Assert.That(sample.CompleteBehavior, Is.True);
-                    Assert.That(sample.Effects, Has.Count.EqualTo(monitored ? 1 : 0));
+                    Assert.That(sample.Effects, Has.Count.EqualTo(monitored ? 2 : 1));
+                    Assert.That(sample.Effects[0], Is.TypeOf(monitored
+                        ? typeof(MonitorObservationEffect)
+                        : typeof(CompleteHandlerEffect)));
                     if (firstChoice != null && monitored != monitoredFirst)
                     {
                         Assert.That(sample.Choice.GetCreationPath(), Is.EqualTo(firstChoice.GetCreationPath()));
@@ -232,13 +256,8 @@ public class ExecutionEffectNotificationTests
                     store.AddBehavior(Array.Empty<SchedulingChoice>(), sample.Choice, sample.Effects, sample.CompleteBehavior);
                     Assert.That(store.GetBehavior(Array.Empty<SchedulingChoice>(), sample.Choice,
                         out var effects, out var complete), Is.True);
-                    Assert.That(effects, Has.Count.EqualTo(monitored ? 1 : 0));
+                    Assert.That(effects, Has.Count.EqualTo(monitored ? 2 : 1));
                     Assert.That(complete, Is.True);
-                    foreach (var observation in strategy.Observations)
-                    {
-                        recorder.NotifyEffects(observation.Choice, observation.Effects, observation.CompleteBehavior);
-                    }
-                    recorder.PrepareForNextIteration();
                 });
             }
         }

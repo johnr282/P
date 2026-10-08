@@ -37,7 +37,7 @@ public class BehaviorStoreTests
     }
 
     private static SchedulingChoice Choice(int kind, StateMachineOperation op, int payload = 1,
-        int receivedPayload = 2, bool initializing = false)
+        int receivedPayload = 2)
     {
         var e = new Event(new PInt(payload));
         return kind switch
@@ -47,7 +47,7 @@ public class BehaviorStoreTests
             2 => new DeliverEventChoice(op.Id, op.StateMachine.Id, (e, new EventInfo(e))),
             3 => new ResumeHandlerChoice(op.Id, op.StateMachine.Id, (e, new EventInfo(e))),
             4 => new CompleteReceiveChoice(op.Id, op.StateMachine.Id, (e, null),
-                (new Event(new PInt(receivedPayload)), null), initializing),
+                (new Event(new PInt(receivedPayload)), null)),
             _ => new RunTaskChoice(op.Id)
         };
     }
@@ -85,7 +85,6 @@ public class BehaviorStoreTests
         node.AddBehavior(Choice(4, op), Array.Empty<ExecutionEffect>(), true);
         Assert.That(node.Transitions.ContainsKey(Choice(4, op, payload: 9)), Is.False);
         Assert.That(node.Transitions.ContainsKey(Choice(4, op, receivedPayload: 9)), Is.False);
-        Assert.That(node.Transitions.ContainsKey(Choice(4, op, initializing: true)), Is.False);
         Assert.That(node.Transitions.ContainsKey(Choice(2, op)), Is.False);
         Assert.That(node.Transitions.ContainsKey(Choice(4, Operation(runtime))), Is.False);
         Assert.That(node.Transitions.ContainsKey(Choice(4,
@@ -103,7 +102,7 @@ public class BehaviorStoreTests
         var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>(), true);
         ExecutionEffect[] Effects(int payload) => new ExecutionEffect[]
         {
-            new SendEffect(sender, new Event(new PInt(payload)), target),
+            new SendEffect(sender, (new Event(new PInt(payload)), null), target),
             new MonitorObservationEffect(sender, new Event(new PInt(3)), ignored: false),
             new CreateEffect(sender, target, null)
         };
@@ -111,7 +110,7 @@ public class BehaviorStoreTests
         Assert.That(node.AddBehavior(Choice(0, op), Effects(2), true), Is.True);
         Assert.That(node.AddBehavior(choice, Effects(4), true), Is.False);
         var changed = Effects(2);
-        changed[0] = new SendEffect(sender, new Event(new PInt(2)), sender);
+        changed[0] = new SendEffect(sender, (new Event(new PInt(2)), null), sender);
         Assert.That(node.AddBehavior(choice, changed, true), Is.False);
         changed = Effects(2);
         Array.Reverse(changed);
@@ -149,7 +148,7 @@ public class BehaviorStoreTests
             1 => new ResumeInitializationChoice(op.Id, op.StateMachine.Id, e),
             2 => new DeliverEventChoice(op.Id, op.StateMachine.Id, (e, null)),
             3 => new ResumeHandlerChoice(op.Id, op.StateMachine.Id, (e, null)),
-            _ => new CompleteReceiveChoice(op.Id, op.StateMachine.Id, (e, null), (received, null), true)
+            _ => new CompleteReceiveChoice(op.Id, op.StateMachine.Id, (e, null), (received, null))
         };
         var live = MakeChoice();
         var snapshot = live.Snapshot();
@@ -174,26 +173,26 @@ public class BehaviorStoreTests
         var nested = new PSeq(new IPValue[] { new PInt(1) });
         var payload = new PSeq(new IPValue[] { nested });
         var e = new OtherEvent { Payload = payload };
-        var send = new SendEffect(null, e, null);
+        var send = new SendEffect(null, (e, null), null);
         var announce = new MonitorObservationEffect(null, e, ignored: false);
         nested.Add(new PInt(2));
         payload.Add(new PInt(3));
         e.Payload = null;
 
-        foreach (var saved in new[] { send.SentEvent, announce.ObservedEvent })
+        foreach (var saved in new[] { send.SentEvent.e, announce.ObservedEvent })
         {
             Assert.That(saved, Is.TypeOf<OtherEvent>().And.Not.SameAs(e));
             Assert.That(((PSeq)saved.Payload).Count, Is.EqualTo(1));
             Assert.That(((PSeq)((PSeq)saved.Payload)[0]).Count, Is.EqualTo(1));
         }
-        Assert.That(send.SentEvent.Payload, Is.Not.SameAs(announce.ObservedEvent.Payload));
+        Assert.That(send.SentEvent.e.Payload, Is.Not.SameAs(announce.ObservedEvent.Payload));
     }
 
     [TestCase(0)]
     [TestCase(1)]
     [TestCase(2)]
     [TestCase(3)]
-    public void SenderIdentityDistinguishesDeliveryAndResumptionInputs(int kind)
+    public void EventOriginDoesNotDistinguishDeliveryAndResumptionInputs(int kind)
     {
         using var runtime = NewRuntime();
         var receiver = Operation(runtime);
@@ -213,23 +212,23 @@ public class BehaviorStoreTests
             {
                 0 => new DeliverEventChoice(receiver.Id, receiver.StateMachine.Id, (e, info)),
                 1 => new ResumeHandlerChoice(receiver.Id, receiver.StateMachine.Id, (e, info)),
-                2 => new CompleteReceiveChoice(receiver.Id, receiver.StateMachine.Id, (e, info), (e, null), false),
-                _ => new CompleteReceiveChoice(receiver.Id, receiver.StateMachine.Id, (e, null), (e, info), false)
+                2 => new CompleteReceiveChoice(receiver.Id, receiver.StateMachine.Id, (e, info), (e, null)),
+                _ => new CompleteReceiveChoice(receiver.Id, receiver.StateMachine.Id, (e, null), (e, info))
             };
         }
         var node = new BehaviorStore.BehaviorNode(Array.Empty<ExecutionEffect>(), true);
         node.AddBehavior(Input(firstSender, "Before"), Array.Empty<ExecutionEffect>(), true);
         Assert.That(node.Transitions.ContainsKey(Input(firstSender, "After")), Is.True);
-        Assert.That(node.Transitions.ContainsKey(Input(secondSender, "Before")), Is.False);
+        Assert.That(node.Transitions.ContainsKey(Input(secondSender, "Before")), Is.True);
         Assert.That(node.Transitions.ContainsKey(Input(equivalentSender, "Before")), Is.True);
         Assert.That(BehaviorStoreComparers.ChoiceEquality.GetHashCode(Input(firstSender, "Before")),
             Is.EqualTo(BehaviorStoreComparers.ChoiceEquality.GetHashCode(Input(equivalentSender, "After"))));
         Assert.That(BehaviorStoreComparers.ChoiceEquality.Equals(
-            Input(firstSender, "Before"), Input(differentTypeSender, "Before")), Is.False);
-        Assert.That(node.Transitions.ContainsKey(Input(differentTypeSender, "Before")), Is.False);
-        Assert.That(node.Transitions.ContainsKey(Input(differentInterfaceSender, "Before")), Is.False);
+            Input(firstSender, "Before"), Input(differentTypeSender, "Before")), Is.True);
+        Assert.That(node.Transitions.ContainsKey(Input(differentTypeSender, "Before")), Is.True);
+        Assert.That(node.Transitions.ContainsKey(Input(differentInterfaceSender, "Before")), Is.True);
         Assert.That(node.AddBehavior(Input(differentTypeSender, "Before"),
-            new ExecutionEffect[] { new MonitorObservationEffect(differentTypeSender, new Event(new PInt(7)), ignored: false) }, true), Is.True);
+            new ExecutionEffect[] { new MonitorObservationEffect(differentTypeSender, new Event(new PInt(7)), ignored: false) }, true), Is.False);
     }
 
     [Test]
@@ -322,8 +321,8 @@ public class BehaviorStoreTests
         Assert.That(comparer.Equals(first, second), Is.True);
         Assert.That(comparer.GetHashCode(first), Is.EqualTo(comparer.GetHashCode(second)));
 
-        var effects = new ExecutionEffect[] { new SendEffect(receiver1.StateMachine.Id, firstEvent, a1) };
-        var matchingEffects = new ExecutionEffect[] { new SendEffect(receiver2.StateMachine.Id, secondEvent, a2) };
+        var effects = new ExecutionEffect[] { new SendEffect(receiver1.StateMachine.Id, (firstEvent, null), a1) };
+        var matchingEffects = new ExecutionEffect[] { new SendEffect(receiver2.StateMachine.Id, (secondEvent, null), a2) };
         var store = new BehaviorStore();
         store.AddBehavior(Array.Empty<SchedulingChoice>(), first, effects, true);
         Assert.That(store.GetBehavior(Array.Empty<SchedulingChoice>(), second, out _, out _), Is.True);
@@ -338,7 +337,7 @@ public class BehaviorStoreTests
             Assert.That(comparer.Equals(first, reorderedChoice), Is.False);
             Assert.That(store.GetBehavior(Array.Empty<SchedulingChoice>(), reorderedChoice, out _, out _), Is.False);
             Assert.That(BehaviorStoreComparers.EffectEquality.Equals(effects[0],
-                new SendEffect(receiver2.StateMachine.Id, reorderedEvent, a2)), Is.False);
+                new SendEffect(receiver2.StateMachine.Id, (reorderedEvent, null), a2)), Is.False);
         }
 
         var c2 = Operation(secondRuntime, path: Path(0, 2)).StateMachine.Id;
@@ -599,7 +598,7 @@ public class BehaviorStoreTests
         ExecutionEffect[] Effects(StateMachineId id) => new ExecutionEffect[]
         {
             new MonitorObservationEffect(id, new Event(), ignored: false),
-            new SendEffect(source, new Event(), id),
+            new SendEffect(source, (new Event(), null), id),
             new CreateEffect(source, id, null)
         };
         var originals = Effects(first);

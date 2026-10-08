@@ -9,6 +9,7 @@ using PChecker.Runtime.Specifications;
 using PChecker.Runtime.StateMachines;
 using PChecker.Runtime.StateMachines.EventInboxes;
 using PChecker.SystematicTesting.Operations;
+using PChecker.SystematicTesting.Strategies.Probabilistic;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solver;
@@ -31,6 +32,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
     {
         private readonly uint maxObservedEventsForMonitorExploration;
         private readonly uint maxRecursionDepthForProgressComputation;
+        private readonly int _maxScheduledSteps;
+        private int _scheduledSteps;
 
         // For now, assume that there is only one monitor.
         private Monitor _monitor;
@@ -47,14 +50,27 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
         private readonly IRandomValueGenerator _random;
 
-        public MonitorGuidedStrategy(IRandomValueGenerator random)
+        private readonly ISchedulingStrategy _fallbackStrategy;
+
+        public MonitorGuidedStrategy(int maxScheduledSteps, IRandomValueGenerator random)
+            : this(maxScheduledSteps, random, fallbackStrategy: null)
+        {
+        }
+
+        internal MonitorGuidedStrategy(
+            int maxScheduledSteps,
+            IRandomValueGenerator random,
+            ISchedulingStrategy fallbackStrategy)
         {
             // JR TODO: Add these to CheckerConfiguration
             maxObservedEventsForMonitorExploration = 100;
             maxRecursionDepthForProgressComputation = 10;
+            _maxScheduledSteps = maxScheduledSteps;
             _predictor = new ExactPredictor();
             _solver = new Z3Solver();
             _random = random;
+            _fallbackStrategy = fallbackStrategy ??
+                new RandomStrategy(maxScheduledSteps, random);
         }
 
         /// <summary>
@@ -104,7 +120,11 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 if (!monitorViolationFound)
                 {
                     bool result = GetFallbackChoice(lastChoice, choices, out next);
-                    UpdateStatesFromChoice(next, _machineStates);
+                    if (result)
+                    {
+                        UpdateStatesFromChoice(next, _machineStates);
+                    }
+
                     return result;
                 }
             }
@@ -141,7 +161,11 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 _guidance = null;
 
                 bool result = GetFallbackChoice(lastChoice, choices, out next);
-                UpdateStatesFromChoice(next, _machineStates);
+                if (result)
+                {
+                    UpdateStatesFromChoice(next, _machineStates);
+                }
+
                 return result;
             }
 
@@ -156,6 +180,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             // Candidate choices all have equal non-null progress values, so they
             // are equally good choices; choose one at random
             next = candidateChoices[_random.Next(candidateChoices.Count)];
+            _scheduledSteps++;
             UpdateStatesFromChoice(next, _machineStates);
             return true;
         }
@@ -165,8 +190,14 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             IEnumerable<SchedulingChoice> choices,
             out SchedulingChoice next)
         {
-            // JR TODO
-            throw new NotImplementedException();
+            bool result = _fallbackStrategy.GetNextSchedulingChoice(
+                lastChoice, choices, out next);
+            if (result)
+            {
+                _scheduledSteps++;
+            }
+
+            return result;
         }
 
 
@@ -419,7 +450,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             int maxValue, 
             out bool next)
         {
-            throw new NotImplementedException();
+            next = _random.Next(maxValue) == 0;
+            _scheduledSteps++;
+            return true;
         }
 
         /// <inheritdoc/>
@@ -428,7 +461,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             int maxValue, 
             out int next)
         {
-            throw new NotImplementedException();
+            next = _random.Next(maxValue);
+            _scheduledSteps++;
+            return true;
         }
 
         /// <inheritdoc/>
@@ -438,37 +473,45 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             _monitorAnalyzer = null;
             _machineStates.Clear();
             _guidance = null;
-            return true;
+            _scheduledSteps = 0;
+            return _fallbackStrategy.PrepareForNextIteration();
         }
 
         /// <inheritdoc/>
         public virtual int GetScheduledSteps()
         {
-            throw new NotImplementedException();
+            return _scheduledSteps;
         }
 
         /// <inheritdoc/>
         public virtual bool HasReachedMaxSchedulingSteps()
         {
-            throw new NotImplementedException();
+            return _maxScheduledSteps > 0 && _scheduledSteps >= _maxScheduledSteps;
         }
 
         /// <inheritdoc/>
         public virtual bool IsFair()
         {
-            throw new NotImplementedException();
+            // Guidance can keep selecting a subset of enabled choices, so it
+            // does not provide a fairness guarantee.
+            return false;
         }
 
         /// <inheritdoc/>
         public virtual string GetDescription()
         {
-            throw new NotImplementedException();
+            return $"monitor-guided[{_fallbackStrategy.GetDescription()}]";
         }
 
         /// <inheritdoc/>
         public virtual void Reset()
         {
-            throw new NotImplementedException();
+            _monitor = null;
+            _monitorAnalyzer = null;
+            _machineStates.Clear();
+            _guidance = null;
+            _scheduledSteps = 0;
+            _fallbackStrategy.Reset();
         }
 
         /// <inheritdoc/>
@@ -477,6 +520,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             IReadOnlyList<ExecutionEffect> effects, 
             bool completeBehavior)
         {
+            _fallbackStrategy.NotifyEffects(lastChoice, effects, completeBehavior);
+
             foreach (var effect in effects)
             {
                 UpdateStatesAndGuidanceFromEffect(effect, _machineStates, _guidance);
@@ -616,7 +661,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             MonitorObservationEffect observation,
             MonitorGuidance guidance)
         {
-            if (!guidance.Valid || observation.Ignored) return;
+            if (guidance == null || !guidance.Valid || observation.Ignored) return;
 
             UpdateGuidanceFromEvent(observation.ObservedEvent, guidance);
         }

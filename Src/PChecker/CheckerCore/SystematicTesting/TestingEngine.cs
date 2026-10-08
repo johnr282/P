@@ -265,7 +265,9 @@ namespace PChecker.SystematicTesting
                         RandomValueGenerator);
                     break;
                 case StrategyType.MonitorGuided:
-                    Strategy = new MonitorGuidedStrategy(RandomValueGenerator);
+                    Strategy = new MonitorGuidedStrategy(
+                        checkerConfiguration.MaxUnfairSchedulingSteps,
+                        RandomValueGenerator);
                     break;
                 default:
                     Error.ReportAndExit(checkerConfiguration.SchedulingStrategy +

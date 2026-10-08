@@ -30,7 +30,7 @@ namespace PChecker.Runtime.Events
         /// </summary>
         internal EventInfo(Event e)
         {
-            EventName = e.GetType().FullName;
+            EventName = e?.GetType().FullName;
         }
 
         /// <summary>
