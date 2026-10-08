@@ -291,7 +291,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
         // Compare events using both type and payload rather than Event.Equals,
         // which ignores payloads.
-        private static bool SameEvent(Event x, Event y) =>
+        public static bool SameEvent(Event x, Event y) =>
             ReferenceEquals(x, y) || 
             x != null && y != null &&
             x.GetType() == y.GetType() && 

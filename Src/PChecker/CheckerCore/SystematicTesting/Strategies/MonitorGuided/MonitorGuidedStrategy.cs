@@ -45,7 +45,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
         private MonitorGuidance _guidance;
 
-        private IRandomValueGenerator _random;
+        private readonly IRandomValueGenerator _random;
 
         public MonitorGuidedStrategy(IRandomValueGenerator random)
         {
@@ -95,7 +95,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         {
             next = null;
 
-            if (_guidance == null)
+            if (_guidance == null || !_guidance.Valid)
             {
                 bool monitorViolationFound = _monitorAnalyzer.GetMonitorGuidance(
                     _monitor.CurrentStateName,
@@ -115,7 +115,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             {
                 int? progressValue = ComputeProgress(
                     choice,
-                    choices,
                     _guidance,
                     _machineStates,
                     recursionDepth: 1);
@@ -173,7 +172,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
         private int? ComputeProgress(
             SchedulingChoice candidateChoice,
-            IEnumerable<SchedulingChoice> choices,
             MonitorGuidance guidance,
             Dictionary<MachineCreationPath, MachineState> machineStates,
             int recursionDepth)
@@ -207,63 +205,37 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 newStates,
                 newGuidance);
 
-            int? predictedProgress = newGuidance.Valid
+            int? progressFromCandidate = newGuidance.Valid
                 ? newGuidance.GuidanceIndex - startingGuidanceIndex : null;
 
-            if (predictedProgress == null)
+            if (progressFromCandidate == null ||
+                newGuidance.ViolationReached ||
+                (progressFromCandidate == 0 && !knownPrediction))
             {
-                // candidateChoice is predicted to invalidate guidance
-                return null;
+                /* 3 cases result in halting:
+                 * 1: candidateChoice is predicted to invalidate guidance.
+                 * 2: candidateChoice is predicted to reach a violation, so no 
+                   further progress is possible.
+                 * 3: Prediction for candidateChoice is unknown, so further 
+                   predictions will also be unknown. Guidance was not updated, 
+                   so no existing choices can become goal events. Therefore, 
+                   further progress computations will have no new opportunities 
+                   to make progress.
+                 */
+                return progressFromCandidate;
             }
 
-            if (newGuidance.ViolationReached)
-            {
-                // candidateChoice is predicted to reach a violation; no further
-                // progress is possible
-                return predictedProgress;
-            }
-            
             var newChoices = ConstructChoices(newStates);
+            var maxFutureProgress = newChoices.Select(c => ComputeProgress(
+                c,
+                newGuidance,
+                newStates,
+                recursionDepth + 1)).Max();
 
-            int? MaxFutureProgress() =>
-                newChoices.Select(c => ComputeProgress(
-                    c,
-                    newChoices,
-                    newGuidance,
-                    newStates,
-                    recursionDepth + 1)).Max();
-
-            if (choiceResultsInGoalEvent)
-            {
-                if (newGuidance.FinalGoalEvent())
-                {
-                    // Progress computation has reached a violation, no need to
-                    // recurse further
-                    return 1;
-                }
-
-                // Even if prediction is unknown, an existing choice could produce
-                // the next goal event, making more progress
-                var maxFutureProgress = MaxFutureProgress(guidanceIndex + 1);
-
-                // If maxFutureProgress is null, then all future paths result in 
-                // invalidating the guidance, making this progress irrelevant.
-                return maxFutureProgress == null ? null : 1 + maxFutureProgress;
-            }
-            else
-            {
-                if (EventHandledByMonitor(
-                    candidateMachineChoice.GetMonitoredEvent(),
-                    _guidance.GetCurrentMonitorState(guidanceIndex)))
-                {
-                    // candidateMachineChoice could invalidate the current guidance
-                    return null;
-                }
-
-                // If prediction is unknown, recursing further will reveal no new
-                // information. 
-                return knownPrediction ? MaxFutureProgress(guidanceIndex) : 0;
-            }
+            // If maxFutureProgress is null, then all future paths result in 
+            // invalidating the guidance, making this progress irrelevant.
+            return maxFutureProgress == null 
+                ? null : progressFromCandidate + maxFutureProgress;
         }
 
         private void UpdateStatesAndGuidance(
@@ -276,12 +248,26 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             UpdateStatesFromChoice(choice, machineStates);
             UpdateGuidanceFromChoice(choice, guidance);
 
-            if (knownPrediction)
+            if (!knownPrediction) return;
+
+            var filteredPrediction = prediction.ToList();
+
+            if (choice is DeliverEventChoice ||
+                choice is CompleteReceiveChoice)
             {
-                foreach (var effect in prediction)
-                {
-                    UpdateStatesAndGuidanceFromEffect(effect, machineStates, guidance);
-                }
+                // Both choice types result in a MonitorObservationEffect when 
+                // their event is delivered; to prevent a single event delivery
+                // from updating guidance twice, remove this effect from prediction
+                var repeatedObservation = prediction.FirstOrDefault(effect =>
+                    effect is MonitorObservationEffect observation &&
+                    BehaviorStoreComparers.SameEvent(
+                        observation.ObservedEvent, choice.GetMonitoredEvent()));
+                filteredPrediction.Remove(repeatedObservation);
+            }
+
+            foreach (var effect in filteredPrediction)
+            {
+                UpdateStatesAndGuidanceFromEffect(effect, machineStates, guidance);
             }
         }
 
@@ -365,8 +351,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// </summary>
         private void UpdateGuidanceFromEvent(RuntimeEvent e, MonitorGuidance guidance)
         {
-            if (!EventHandledByMonitor(e, guidance.GetCurrentMonitorState()) ||
-                guidance.ViolationReached)
+            if (guidance.ViolationReached ||
+                !EventHandledByMonitor(e, guidance.GetCurrentMonitorState()))
                 return;
 
             // e will be handled by the monitor, so in order to not invalidate
@@ -501,9 +487,11 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
             var machineState = GetStateOrThrow(creationPath, _machineStates);
 
+            // lastChoice is already added to machine trace, so don't pass full
+            // trace to predictor
             _predictor.AddObservation(
                 creationPath,
-                machineState.Trace,
+                machineState.Trace[0..^1],
                 lastChoice,
                 effects,
                 completeBehavior);
@@ -570,7 +558,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             }
         }
 
-        private void UpdateStatesFromChoice(StateMachineSchedulingChoice choice,
+        private static void UpdateStatesFromChoice(SchedulingChoice choice,
             Dictionary<MachineCreationPath, MachineState> machineStates)
         {
             var machinePath = choice.GetCreationPath();
@@ -603,7 +591,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             }
         }
 
-        private MachineState GetStateOrThrow(MachineCreationPath path,
+        private static MachineState GetStateOrThrow(MachineCreationPath path,
             Dictionary<MachineCreationPath, MachineState> machineStates)
         {
             if (!machineStates.TryGetValue(path, out var state))
