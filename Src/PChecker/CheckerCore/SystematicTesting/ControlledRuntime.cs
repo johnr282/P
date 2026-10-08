@@ -543,34 +543,6 @@ namespace PChecker.SystematicTesting
             Scheduler.ScheduleNextEnabledOperation(AsyncOperationType.Send);
             ResetProgramCounter(sender);
 
-            SendEffect.DeliveryType deliveryType;
-
-            if (target.IsEventHandlerInProgress || target.IsInitializing)
-            {
-                deliveryType = target.EventSatisfiesPendingReceive(e) 
-                    ? SendEffect.DeliveryType.CompleteReceive 
-                    : SendEffect.DeliveryType.Pending;
-            }
-            else
-            {
-                deliveryType = SendEffect.DeliveryType.DeliverEvent;
-            }
-
-            EffectsSinceLastSchedulingChoice.Add(new SendEffect(
-                sender?.Id, 
-                e, 
-                targetId, 
-                deliveryType, 
-                target.InProgressEvent));
-
-            if (target.IsHalted)
-            {
-                LogWriter.LogSendEvent(targetId, sender?.Id.Name, sender?.Id.Type,
-                    (sender)?.CurrentStateName ?? string.Empty, e, isTargetHalted: true);
-                TryHandleDroppedEvent(e, targetId);
-                return AddEventStatus.Dropped;
-            }
-
             var enqueueStatus = EnqueueEvent(target, e, sender);
             if (enqueueStatus == AddEventStatus.Dropped)
             {
@@ -592,8 +564,13 @@ namespace PChecker.SystematicTesting
             var eventInfo = new EventInfo(e, originInfo, sender.VectorTime);
 
             LogWriter.LogSendEvent(stateMachine.Id, sender.Id.Name, sender.Id.Type, sender.CurrentStateName,
-                e, isTargetHalted: false);
-    
+                e, isTargetHalted: stateMachine.IsHalted);
+
+            EffectsSinceLastSchedulingChoice.Add(new SendEffect(
+                sender?.Id,
+                (e, eventInfo),
+                stateMachine.Id));
+
             return stateMachine.Enqueue(e, eventInfo);
         }
 
@@ -1011,6 +988,14 @@ namespace PChecker.SystematicTesting
         {
             EffectsSinceLastSchedulingChoice.Add(new CompleteHandlerEffect(
                 stateMachine.Id, handledEvent));
+        }
+
+        /// <summary>
+        /// Notifies that a state machine has halted.
+        /// </summary>
+        internal void NotifyHalt(StateMachine stateMachine)
+        {
+            EffectsSinceLastSchedulingChoice.Add(new HaltEffect(stateMachine.Id));
         }
 
         /// <summary>

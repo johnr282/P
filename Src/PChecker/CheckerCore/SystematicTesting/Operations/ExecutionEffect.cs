@@ -38,41 +38,17 @@ namespace PChecker.SystematicTesting.Operations
     {
         // Snapshot captured at send time, independent of potential mutation
         // by receiver.
-        internal Event SentEvent { get; }
+        internal (Event e, EventInfo info) SentEvent { get; }
         internal StateMachineId TargetStateMachineId { get; }
 
-        /// <summary>
-        /// Type of delivery to target available at send time. DeliveryType.Pending
-        /// indicates that target cannot currently receive the event.
-        /// </summary>
-        internal DeliveryType AvailableDeliveryType { get; }
-
-        /// <summary>
-        /// Event currently being handled by target at send time. If target is 
-        /// initializing, this will be the initial event. If no event is being
-        /// handled, this will be (null, null).
-        /// </summary>
-        internal (Event e, EventInfo info) TargetInProgressEvent { get; }
-
         internal SendEffect(
-            StateMachineId stateMachineId, 
-            Event sentEvent, 
-            StateMachineId targetStateMachineId,
-            DeliveryType availableDeliveryType,
-            (Event e, EventInfo info) targetInProgressEvent)
+            StateMachineId stateMachineId,
+            (Event e, EventInfo info) sentEvent, 
+            StateMachineId targetStateMachineId)
             : base(stateMachineId)
         {
-            SentEvent = sentEvent?.Snapshot();
+            SentEvent = (sentEvent.e?.Snapshot(), sentEvent.info);
             TargetStateMachineId = targetStateMachineId;
-            AvailableDeliveryType = availableDeliveryType;
-            TargetInProgressEvent = targetInProgressEvent;
-        }
-
-        internal enum DeliveryType
-        {
-            DeliverEvent,
-            CompleteReceive,
-            Pending
         }
     }
 
@@ -153,4 +129,12 @@ namespace PChecker.SystematicTesting.Operations
         }
     }
 
+    /// <summary>
+    /// Represents a machine halting. 
+    /// </summary>
+    internal sealed class HaltEffect : ExecutionEffect
+    {
+        internal HaltEffect(StateMachineId haltedMachineId) 
+            : base(haltedMachineId) { }
+    }
 }

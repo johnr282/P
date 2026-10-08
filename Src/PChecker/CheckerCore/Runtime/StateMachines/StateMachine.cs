@@ -485,6 +485,7 @@ namespace PChecker.Runtime.StateMachines
         /// <param name="e">The event being handled when the state machine halts.</param>
         private protected Task HaltAsync(Event e)
         {
+            Runtime.NotifyHalt(this);
             CurrentStatus = Status.Halted;
 
             // Close the inbox, which will stop any subsequent enqueues.
@@ -563,6 +564,7 @@ namespace PChecker.Runtime.StateMachines
 
             if (innerException is ExecutionCanceledException || innerException is TaskSchedulerException)
             {
+                Runtime.NotifyHalt(this);
                 CurrentStatus = Status.Halted;
                 Debug.WriteLine($"<Exception> {innerException.GetType().Name} was thrown from {Id}.");
             }

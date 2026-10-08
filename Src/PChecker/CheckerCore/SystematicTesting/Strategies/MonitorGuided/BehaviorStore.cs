@@ -414,7 +414,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                     (SendEffect a, SendEffect b) =>
                         SameStateMachineId(a.TargetStateMachineId, 
                             b.TargetStateMachineId) &&
-                        SameEvent(a.SentEvent, b.SentEvent),
+                        SameEventWithMetadata(a.SentEvent, b.SentEvent),
 
                     (MonitorObservationEffect a, MonitorObservationEffect b) =>
                         SameEvent(a.ObservedEvent, b.ObservedEvent),
@@ -431,6 +431,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                         SameEvent(a.EventOfCompletedHandler.e, 
                             b.EventOfCompletedHandler.e),
 
+                    (HaltEffect a, HaltEffect b) => true,
+
                     _ => throw new NotSupportedException(
                         $"Unsupported execution effect: {x.GetType()}")
                 };
@@ -444,7 +446,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 {
                     SendEffect e => HashCode.Combine(
                         StateMachineIdHash(e.TargetStateMachineId), 
-                        EventHash(e.SentEvent)),
+                        EventWithMetadataHash(e.SentEvent)),
 
                     MonitorObservationEffect e => EventHash(e.ObservedEvent),
 

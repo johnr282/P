@@ -4,6 +4,7 @@ using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solv
 using Plang.Compiler.TypeChecker.AST.States;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -14,11 +15,15 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
     {
         public SymExpr ViolationCondition { get; set; }
 
+        public int GuidanceIndex { get; set; } = 0;
+
+        public bool Valid { get; set; } = true;
+
         /// <summary>
         /// At s = ViolatingExecution[i], the monitor was in state s.state and 
         /// received event s.e.
         /// </summary>
-        private IReadOnlyList<(SymEvent e, State state)> _violatingExecution;
+        private readonly IReadOnlyList<(SymEvent e, State state)> _violatingExecution;
 
         public MonitorGuidance(
             IReadOnlyList<(SymEvent e, State state)> violatingExecution, 
@@ -28,19 +33,28 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             ViolationCondition = violationCondition;
         }
 
-        public SymEvent GetNextViolatingEvent(int guidanceIndex)
-        {
-            return _violatingExecution[guidanceIndex].e;
-        }
+        public SymEvent GetNextGoalEvent() =>
+            _violatingExecution[GuidanceIndex].e;
 
-        public State GetCurrentMonitorState(int guidanceIndex)
-        {
-            return _violatingExecution[guidanceIndex].state;
-        }
+        public State GetCurrentMonitorState() => 
+            _violatingExecution[GuidanceIndex].state;
 
-        public bool FinalGuidanceIndex(int guidanceIndex)
+        public bool ViolationReached => GuidanceIndex == _violatingExecution.Count;
+
+        public MonitorGuidance Clone()
         {
-            return guidanceIndex == _violatingExecution.Count - 1;
+            var violatingExecution = _violatingExecution
+                .Select(step => (
+                    new SymEvent(step.e.Event, SymExprFactory.CloneSymExpr(step.e.Payload)),
+                    step.state))
+                .ToImmutableArray();
+
+            return new MonitorGuidance(
+                violatingExecution,
+                SymExprFactory.CloneSymExpr(ViolationCondition))
+            {
+                GuidanceIndex = this.GuidanceIndex
+            };
         }
     }
 }

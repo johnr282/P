@@ -1,15 +1,19 @@
-﻿using LanguageExt;
+﻿using Antlr4.Runtime.Atn;
+using LanguageExt.Pipes;
 using Microsoft.Z3;
 using PChecker.IO.Debugging;
 using PChecker.Random;
 using PChecker.Runtime.Events;
+using PChecker.Runtime.Exceptions;
 using PChecker.Runtime.Specifications;
 using PChecker.Runtime.StateMachines;
+using PChecker.Runtime.StateMachines.EventInboxes;
 using PChecker.SystematicTesting.Operations;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solver;
 using Plang.Compiler.TypeChecker.AST.Declarations;
+using Plang.Compiler.TypeChecker.AST.States;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -17,12 +21,9 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
-
-using RuntimeEvent = PChecker.Runtime.Events.Event;
 using ASTEvent = Plang.Compiler.TypeChecker.AST.Declarations.Event;
 using ASTState = Plang.Compiler.TypeChecker.AST.States.State;
-using Plang.Compiler.TypeChecker.AST.States;
-using PChecker.Runtime.StateMachines.EventInboxes;
+using RuntimeEvent = PChecker.Runtime.Events.Event;
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 {
@@ -35,16 +36,14 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private Monitor _monitor;
         private MonitorAnalyzer _monitorAnalyzer;
 
-        private readonly Dictionary<MachineCreationPath, List<SchedulingChoice>> 
-            _machineTraces = new();
+        private readonly Dictionary<MachineCreationPath, MachineState> 
+            _machineStates = new();
 
         private readonly IPredictor _predictor;
 
         private readonly ISolver _solver;
 
         private MonitorGuidance _guidance;
-
-        private int _guidanceIndex;
 
         private IRandomValueGenerator _random;
 
@@ -103,9 +102,11 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                     out _guidance);
 
                 if (!monitorViolationFound)
-                    return GetFallbackChoice(lastChoice, choices, out next);
-
-                _guidanceIndex = 0;
+                {
+                    bool result = GetFallbackChoice(lastChoice, choices, out next);
+                    UpdateStatesFromChoice(next, _machineStates);
+                    return result;
+                }
             }
 
             int? maxProgressValue = null;
@@ -115,9 +116,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 int? progressValue = ComputeProgress(
                     choice,
                     choices,
-                    _guidanceIndex,
-                    _guidance.ViolationCondition,
-                    _machineTraces,
+                    _guidance,
+                    _machineStates,
                     recursionDepth: 1);
 
                 if (progressValue == null)
@@ -140,7 +140,10 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 // Every choice invalidates the current guidance, so we need to
                 // recompute it next time
                 _guidance = null;
-                return GetFallbackChoice(lastChoice, choices, out next);
+
+                bool result = GetFallbackChoice(lastChoice, choices, out next);
+                UpdateStatesFromChoice(next, _machineStates);
+                return result;
             }
 
             // JR TODO: Could choose an unexplored choice if possible to 
@@ -154,6 +157,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             // Candidate choices all have equal non-null progress values, so they
             // are equally good choices; choose one at random
             next = candidateChoices[_random.Next(candidateChoices.Count)];
+            UpdateStatesFromChoice(next, _machineStates);
             return true;
         }
 
@@ -170,9 +174,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private int? ComputeProgress(
             SchedulingChoice candidateChoice,
             IEnumerable<SchedulingChoice> choices,
-            int guidanceIndex,
-            SymExpr violationCondition,
-            Dictionary<MachineCreationPath, List<SchedulingChoice>> machineTraces,
+            MonitorGuidance guidance,
+            Dictionary<MachineCreationPath, MachineState> machineStates,
             int recursionDepth)
         {
             // JR TODO: Should RunTaskChoices get special handling? Computing
@@ -185,50 +188,54 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 return 0;
 
             var candidatePath = candidateMachineChoice.GetCreationPath();
-            var candidateTrace = machineTraces.TryGetValue(candidatePath, out var trace) 
-                ? trace : new List<SchedulingChoice>();
+            var candidateState = GetStateOrThrow(candidatePath, machineStates);
 
             bool knownPrediction = _predictor.PredictEffects(
                 candidatePath,
-                candidateTrace,
+                candidateState.Trace,
                 candidateMachineChoice,
                 out var prediction);
 
-            var newChoices = new List<SchedulingChoice>(choices);
-            UpdateChoices(
+            var newStates = CloneMachineStates(machineStates);
+            var newGuidance = guidance.Clone();
+            int startingGuidanceIndex = newGuidance.GuidanceIndex;
+
+            UpdateStatesAndGuidance(
+                candidateMachineChoice, 
                 knownPrediction, 
                 prediction, 
-                candidateMachineChoice, 
-                newChoices);
+                newStates,
+                newGuidance);
 
-            // Update candidate machine's trace with the candidate choice for next
-            // ComputeProgress call
-            var newTraces = new Dictionary<MachineCreationPath,
-                List<SchedulingChoice>>(machineTraces);
-            var newTrace = new List<SchedulingChoice>(candidateTrace);
-            newTrace.Add(candidateMachineChoice);
-            newTraces[candidatePath] = newTrace;
+            int? predictedProgress = newGuidance.Valid
+                ? newGuidance.GuidanceIndex - startingGuidanceIndex : null;
 
-            bool choiceResultsInGoalEvent = ChoiceResultsInGoalEvent(
-                candidateMachineChoice,
-                guidanceIndex,
-                violationCondition,
-                out var nextCondition);
+            if (predictedProgress == null)
+            {
+                // candidateChoice is predicted to invalidate guidance
+                return null;
+            }
 
-            int? MaxFutureProgress(int nextGuidanceIndex) =>
-                newChoices
-                    .Where(c => c is not PendingDeliverEventChoice)
-                    .Select(c => ComputeProgress(
-                        c,
-                        newChoices,
-                        nextGuidanceIndex,
-                        nextCondition,
-                        newTraces,
-                        recursionDepth + 1)).Max();
+            if (newGuidance.ViolationReached)
+            {
+                // candidateChoice is predicted to reach a violation; no further
+                // progress is possible
+                return predictedProgress;
+            }
+            
+            var newChoices = ConstructChoices(newStates);
+
+            int? MaxFutureProgress() =>
+                newChoices.Select(c => ComputeProgress(
+                    c,
+                    newChoices,
+                    newGuidance,
+                    newStates,
+                    recursionDepth + 1)).Max();
 
             if (choiceResultsInGoalEvent)
             {
-                if (_guidance.FinalGuidanceIndex(guidanceIndex))
+                if (newGuidance.FinalGoalEvent())
                 {
                     // Progress computation has reached a violation, no need to
                     // recurse further
@@ -259,223 +266,133 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             }
         }
 
-        private void UpdateChoices(
+        private void UpdateStatesAndGuidance(
+            StateMachineSchedulingChoice choice,
             bool knownPrediction,
             IReadOnlyList<ExecutionEffect> prediction,
-            StateMachineSchedulingChoice candidateChoice,
-            List<SchedulingChoice> choices)
+            Dictionary<MachineCreationPath, MachineState> machineStates,
+            MonitorGuidance guidance)
         {
-            // JR TODO: Think about effect of complete vs incomplete predictions 
+            UpdateStatesFromChoice(choice, machineStates);
+            UpdateGuidanceFromChoice(choice, guidance);
 
-            if (candidateChoice is ResumeHandlerChoice ||
-                candidateChoice is ResumeInitializationChoice)
+            if (knownPrediction)
             {
-                if (knownPrediction)
+                foreach (var effect in prediction)
                 {
-                    // Only remove resume choices if handler has completed; 
-                    // otherwise, handler can be resumed again and it remains a 
-                    // valid choice in the next step
-                    bool candidateHandlerCompleted = prediction.Any(e =>
-                        e is CompleteHandlerEffect &&
-                        BehaviorStoreComparers.SameStateMachineId(
-                            candidateChoice.StateMachineId,
-                            e.StateMachineId));
-
-                    if (candidateHandlerCompleted)
-                        choices.Remove(candidateChoice);
+                    UpdateStatesAndGuidanceFromEffect(effect, machineStates, guidance);
                 }
-                else
-                {
-                    // If prediction is unknown, we don't know whether the handler 
-                    // can be resumed again. To increase the likelihood of the
-                    // progress computation eventually finishing, remove the choice.
-                    choices.Remove(candidateChoice);
-                }
-            }
-            else
-            {
-                choices.Remove(candidateChoice);
-            }
-
-            foreach (var effect in prediction)
-            {
-                UpdateChoicesFromEffect(effect, choices);
-            }
-        }
-
-        private void UpdateChoicesFromEffect(
-            ExecutionEffect effect,
-            List<SchedulingChoice> choices)
-        {
-            // OpId is irrelevant for progress function's purposes
-            ulong placeholderOpId = 0;
-
-            switch (effect)
-            {
-                case SendEffect send:
-                    var sentEvent = (send.SentEvent, new EventInfo(send.SentEvent));
-                    switch (send.AvailableDeliveryType)
-                    {
-                        case SendEffect.DeliveryType.DeliverEvent:
-                            choices.Add(new DeliverEventChoice(
-                                placeholderOpId,
-                                send.TargetStateMachineId,
-                                sentEvent));
-                            break;
-
-                        case SendEffect.DeliveryType.CompleteReceive:
-                            choices.Add(new CompleteReceiveChoice(
-                                placeholderOpId,
-                                send.TargetStateMachineId,
-                                send.TargetInProgressEvent,
-                                sentEvent));
-                            break;
-
-                        case SendEffect.DeliveryType.Pending:
-                            choices.Add(new PendingDeliverEventChoice(
-                                placeholderOpId,
-                                send.TargetStateMachineId,
-                                sentEvent));
-                            break;
-                    }
-                    break;
-
-                case CreateEffect create:
-                    choices.Add(new InitializeChoice(
-                        placeholderOpId,
-                        create.CreatedStateMachineId,
-                        create.InitialEvent));
-                    break;
-
-                case BlockOnReceiveEffect receive:
-                {
-                    var matchingChoices = choices.Where(c =>
-                        c is PendingDeliverEventChoice pending &&
-                        BehaviorStoreComparers.SameStateMachineId(
-                            pending.StateMachineId,
-                            receive.StateMachineId) &&
-                        EventInbox.IsWaitedEvent(
-                            pending.PendingEventToDeliver.e,
-                            receive.ReceivePredicates.ToDictionary()));
-
-                    var matchingPendingDeliveries =
-                        ((IEnumerable<PendingDeliverEventChoice>)matchingChoices).ToList();
-
-                    foreach (var matchingDelivery in matchingPendingDeliveries)
-                    {
-                        choices.Remove(matchingDelivery);
-                    }
-
-                    foreach (var matchingDelivery in matchingPendingDeliveries)
-                    {
-                        choices.Add(new CompleteReceiveChoice(
-                            placeholderOpId,
-                            receive.StateMachineId,
-                            receive.InProgressEvent,
-                            matchingDelivery.PendingEventToDeliver));
-                    }
-                    break;
-                }
-
-                case CompleteHandlerEffect complete:
-                {
-                    var matchingChoices = choices.Where(c =>
-                    c is PendingDeliverEventChoice pending &&
-                    BehaviorStoreComparers.SameStateMachineId(
-                        pending.StateMachineId,
-                        complete.StateMachineId));
-
-                    var matchingPendingDeliveries =
-                        ((IEnumerable<PendingDeliverEventChoice>)matchingChoices).ToList();
-
-                    foreach (var matchingDelivery in matchingPendingDeliveries)
-                    {
-                        choices.Remove(matchingDelivery);
-                    }
-
-                    foreach (var matchingDelivery in matchingPendingDeliveries)
-                    {
-                        choices.Add(new DeliverEventChoice(
-                            placeholderOpId,
-                            matchingDelivery.StateMachineId,
-                            matchingDelivery.PendingEventToDeliver));
-                    }
-                    break;
-                }
-
-                default:
-                    // MonitorObservationEffect does not produce new choices
-                    break;
-            }
-        }
-
-        private bool ChoiceResultsInGoalEvent(
-            SchedulingChoice choice,
-            int guidanceIndex,
-            SymExpr violationCondition,
-            out SymExpr nextCondition)
-        {
-            nextCondition = violationCondition;
-            switch (choice)
-            {
-                case StateMachineSchedulingChoice machineChoice:
-                    var e = machineChoice.GetMonitoredEvent();
-                    if (e == null)
-                        return false;
-
-                    return IsGoalEvent(
-                        e,
-                        guidanceIndex,
-                        violationCondition,
-                        out nextCondition);
-                default:
-                    return false;
             }
         }
 
         /// <summary>
-        /// Checks if e is a valid goal event according to the given guidanceIndex
-        /// and violationCondition. 
+        /// Construct all available state machine choices from the given machine
+        /// states. 
         /// </summary>
-        /// <param name="e"></param>
-        /// <param name="guidanceIndex"></param>
-        /// <param name="violationCondition"></param>
-        /// <param name="nextCondition">
-        /// If true is returned, updated condition with equality constraint 
-        /// requiring event at goalIndex to be e. 
-        /// If false is returned, equal to currentCondition.
-        /// </param>
-        /// <returns>
-        /// True if e is confirmed to be a valid goal event, false if not (this 
-        /// includes an Unknown result from the solver).
-        /// </returns>
-        private bool IsGoalEvent(
-            RuntimeEvent e, 
-            int guidanceIndex,
-            SymExpr violationCondition,
-            out SymExpr nextCondition)
+        private List<SchedulingChoice> ConstructChoices(
+            IReadOnlyDictionary<MachineCreationPath, MachineState> machineStates)
         {
-            nextCondition = violationCondition;
-            SymEvent goalEvent = _guidance.GetNextViolatingEvent(guidanceIndex);
+            // JR TODO: Figure out a way to deduplicate logic from here and 
+            // OperationScheduler.GetSchedulingChoices().
 
-            if (!EventTypeMatches(goalEvent.Event, e))
-                return false;
+            // OpId is irrelevant for progress function's purposes
+            ulong placeholderOpId = 0;
+
+            var choices = new List<SchedulingChoice>();
+            foreach (var (path, state) in machineStates)
+            {
+                switch (state.CurrentStatus)
+                {
+                    case MachineState.Status.InitializationPending:
+                        choices.Add(new InitializeChoice(
+                            placeholderOpId, state.Id, state.InitialEvent));
+                        break;
+
+                    case MachineState.Status.Initializing:
+                        choices.Add(new ResumeInitializationChoice(
+                            placeholderOpId, state.Id, state.InitialEvent));
+                        break;
+
+                    case MachineState.Status.HandlingEvent:
+                        choices.Add(new ResumeHandlerChoice(
+                            placeholderOpId, state.Id, state.InProgressEvent));
+                        break;
+
+                    case MachineState.Status.BlockedOnReceive:
+                        foreach (var ev in state.Inbox)
+                        {
+                            if (EventInbox.IsWaitedEvent(
+                                ev.e, state.ReceivePredicates))
+                            {
+                                choices.Add(new CompleteReceiveChoice(
+                                    placeholderOpId,
+                                    state.Id,
+                                    state.InProgressEvent,
+                                    ev));
+                            }
+                        }
+                        break;
+
+                    case MachineState.Status.Idle:
+                        foreach (var ev in state.Inbox)
+                        {
+                            choices.Add(new DeliverEventChoice(
+                                placeholderOpId, state.Id, ev));
+                        }
+                        break;
+
+                    case MachineState.Status.Halted:
+                        // Cannot be scheduled, so no choices
+                        break;
+                }
+            }
+
+            return choices;
+        }
+
+        private void UpdateGuidanceFromChoice(StateMachineSchedulingChoice choice,
+            MonitorGuidance guidance)
+        {
+            var e = choice.GetMonitoredEvent();
+            if (e == null)
+                return;
+
+            UpdateGuidanceFromEvent(e, guidance);
+        }
+
+        /// <summary>
+        /// Updates the given guidance according to e.
+        /// </summary>
+        private void UpdateGuidanceFromEvent(RuntimeEvent e, MonitorGuidance guidance)
+        {
+            if (!EventHandledByMonitor(e, guidance.GetCurrentMonitorState()) ||
+                guidance.ViolationReached)
+                return;
+
+            // e will be handled by the monitor, so in order to not invalidate
+            // guidance, it must be a goal event
+            
+            SymEvent goalEvent = guidance.GetNextGoalEvent();
 
             var concretePayload = new ConcreteExpr(
                 e.Payload?.Clone(),
                 goalEvent.Payload.Type);
 
             var candidateCondition = SymExprFactory.And(
-                violationCondition,
+                guidance.ViolationCondition,
                 SymExprFactory.Equal(goalEvent.Payload, concretePayload));
 
-            if (_solver.CheckSat(candidateCondition) == SatResult.Sat)
+            bool isGoalEvent = EventTypeMatches(goalEvent.Event, e) &&
+                _solver.CheckSat(candidateCondition) == SatResult.Sat;
+
+            if (isGoalEvent)
             {
-                nextCondition = candidateCondition;
-                return true;
+                guidance.GuidanceIndex++;
+                guidance.ViolationCondition = candidateCondition;
+                return;
             }
 
-            return false;
+            guidance.Valid = false;
         }
 
         public static bool EventTypeMatches(
@@ -533,7 +450,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         {
             _monitor = null;
             _monitorAnalyzer = null;
-            _machineTraces.Clear();
+            _machineStates.Clear();
             _guidance = null;
             return true;
         }
@@ -574,88 +491,281 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             IReadOnlyList<ExecutionEffect> effects, 
             bool completeBehavior)
         {
-            // Check for MonitorObservationEffects and update guidance as necessary.
-            if (_guidance != null)
+            foreach (var effect in effects)
             {
-                foreach (var effect in effects)
-                {
-                    if (effect is MonitorObservationEffect observation)
-                    {
-                        // Break early if observation invalidates guidance
-                        if (!UpdateGuidance(observation))
-                            break;
-                    }
-                }
+                UpdateStatesAndGuidanceFromEffect(effect, _machineStates, _guidance);
             }
 
             var creationPath = lastChoice.GetCreationPath();
             if (creationPath == null) return;
 
-            if (!_machineTraces.TryGetValue(creationPath, out var machineTrace))
-            {
-                machineTrace = new();
-                _machineTraces[creationPath] = machineTrace;
-            }
+            var machineState = GetStateOrThrow(creationPath, _machineStates);
 
             _predictor.AddObservation(
                 creationPath,
-                machineTrace,
+                machineState.Trace,
                 lastChoice,
                 effects,
                 completeBehavior);
-            machineTrace.Add(lastChoice);
+        }
+
+        private void UpdateStatesAndGuidanceFromEffect(
+            ExecutionEffect effect,
+            Dictionary<MachineCreationPath, MachineState> machineStates,
+            MonitorGuidance guidance)
+        {
+            switch (effect)
+            {
+                case SendEffect send:
+                    {
+                        var targetState = GetStateOrThrow(
+                            send.TargetStateMachineId.CreationPath, machineStates);
+                        targetState.OnSentEvent(send.SentEvent);
+                        break;
+                    }
+                case MonitorObservationEffect observation:
+                    UpdateGuidanceFromObservation(observation, guidance);
+                    break;
+
+                case CreateEffect create:
+                    {
+                        var createdPath = create.CreatedStateMachineId.CreationPath;
+                        if (machineStates.ContainsKey(createdPath))
+                        {
+                            throw new PInternalException(
+                                "Newly created machine already has a machine state");
+                        }
+
+                        machineStates[createdPath] = new MachineState(
+                            create.CreatedStateMachineId, create.InitialEvent);
+                        break;
+                    }
+                case BlockOnReceiveEffect receive:
+                    {
+                        var blockedState = GetStateOrThrow(
+                           effect.StateMachineId.CreationPath, machineStates);
+                        blockedState.OnReceive(receive.ReceivePredicates.ToDictionary());
+                        break;
+                    }
+
+                case CompleteHandlerEffect complete:
+                    {
+                        var completedState = GetStateOrThrow(
+                           effect.StateMachineId.CreationPath, machineStates);
+                        completedState.OnCompleteHandler();
+                        break;
+                    }
+
+                case HaltEffect haltEffect:
+                    {
+                        var haltedState = GetStateOrThrow(
+                           effect.StateMachineId.CreationPath, machineStates);
+                        haltedState.OnHalt();
+                        break;
+                    }
+                    
+                default:
+                    throw new NotSupportedException(
+                        $"Unsupported effect type {effect.GetType().Name}");
+            }
+        }
+
+        private void UpdateStatesFromChoice(StateMachineSchedulingChoice choice,
+            Dictionary<MachineCreationPath, MachineState> machineStates)
+        {
+            var machinePath = choice.GetCreationPath();
+            if (machinePath == null) return;
+
+            var state = GetStateOrThrow(machinePath, machineStates);
+            state.Trace.Add(choice);
+
+            switch (choice)
+            {
+                case InitializeChoice init:
+                    state.OnInit(init.InitialEvent);
+                    break;
+
+                case DeliverEventChoice deliver:
+                    state.OnEventDelivered(deliver.EventToDeliver);
+                    break;
+
+                case CompleteReceiveChoice receive:
+                    state.OnReceiveCompletion(receive.EventToDeliver);
+                    break;
+
+                case ResumeInitializationChoice:
+                case ResumeHandlerChoice:
+                    break;
+
+                default:
+                    throw new NotSupportedException(
+                        $"Unsupported scheduling choice type {choice.GetType().Name}");
+            }
+        }
+
+        private MachineState GetStateOrThrow(MachineCreationPath path,
+            Dictionary<MachineCreationPath, MachineState> machineStates)
+        {
+            if (!machineStates.TryGetValue(path, out var state))
+            {
+                throw new PInternalException("Machine state not found");
+            }
+            return state;
+        }
+
+        private static Dictionary<MachineCreationPath, MachineState> CloneMachineStates(
+            IReadOnlyDictionary<MachineCreationPath, MachineState> machineStates)
+        {
+            return machineStates.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value.Clone());
         }
 
         /// <summary>
-        /// Updates the current monitor guidance according to the given observation.
+        /// Updates the given monitor guidance according to the given observation.
         /// </summary>
-        /// <returns>
-        /// True if guidance is still valid, false if it was invalidated by observation.
-        /// </returns>
-        private bool UpdateGuidance(MonitorObservationEffect observation)
+        private void UpdateGuidanceFromObservation(
+            MonitorObservationEffect observation,
+            MonitorGuidance guidance)
         {
-            if (IsGoalEvent(
-                observation.ObservedEvent,
-                _guidanceIndex,
-                _guidance.ViolationCondition,
-                out var newCondition))
+            if (!guidance.Valid || observation.Ignored) return;
+
+            UpdateGuidanceFromEvent(observation.ObservedEvent, guidance);
+        }
+
+        private class MachineState
+        {
+            public StateMachineId Id { get; }
+            public RuntimeEvent InitialEvent { get; }
+            public List<SchedulingChoice> Trace { get; } = new();
+            public Status CurrentStatus { get; set; } = Status.InitializationPending;
+            public (RuntimeEvent e, EventInfo info) InProgressEvent { get; set; } 
+                = (null, null);
+
+            public Dictionary<Type, Func<RuntimeEvent, bool>> 
+                ReceivePredicates { get; set; } = null;
+
+            // JR TODO: Assuming event set inbox type for now; will need to change this
+            public HashSet<(RuntimeEvent e, EventInfo info)> Inbox { get; } = new();
+
+            public enum Status
             {
-                _guidanceIndex++;
-                _guidance.ViolationCondition = newCondition;
-                return true;
+                InitializationPending, 
+                Initializing, 
+                HandlingEvent,
+                BlockedOnReceive,
+                Idle,
+                Halted
             }
 
-            // Ignored observations must still be recorded because they may not
-            // be ignored in other monitor states
-            if (observation.Ignored)
-                return true;
-
-            // If the observed event is not a goal event and not ignored, then it
-            // invalidates the current guidance
-            _guidance = null;
-            return false;
-        }
-
-        /// <summary>
-        /// Special scheduling choice used only by the progress function; represents
-        /// a sent event that cannot be received by the target yet. Once the target
-        /// is ready to receive it, the choice will become a DeliverEventChoice 
-        /// or a CompleteReceiveChoice.
-        /// </summary>
-        private class PendingDeliverEventChoice : StateMachineSchedulingChoice
-        {
-            /// <summary>
-            /// Pending event that may eventually be delivered to the operation.
-            /// </summary>
-            public (RuntimeEvent e, EventInfo info) PendingEventToDeliver { get; }
-
-            internal PendingDeliverEventChoice(
-            ulong operationId,
-            StateMachineId targetMachineId,
-            (RuntimeEvent e, EventInfo info) eventToDeliver)
-            : base(operationId, targetMachineId)
+            public MachineState(StateMachineId id, RuntimeEvent initialEvent)
             {
-                PendingEventToDeliver = eventToDeliver;
+                Id = id;
+                InitialEvent = initialEvent;
+            }
+
+            public MachineState Clone()
+            {
+                var clone = new MachineState(Id, InitialEvent?.Snapshot())
+                {
+                    CurrentStatus = CurrentStatus,
+                    InProgressEvent = CloneEventWithMetadata(InProgressEvent),
+                    ReceivePredicates = ReceivePredicates == null
+                        ? null
+                        : new Dictionary<Type, Func<RuntimeEvent, bool>>(ReceivePredicates)
+                };
+
+                clone.Trace.AddRange(Trace.Select(choice => choice.Snapshot()));
+                foreach (var ev in Inbox)
+                {
+                    clone.Inbox.Add(CloneEventWithMetadata(ev));
+                }
+
+                return clone;
+            }
+
+            private static (RuntimeEvent e, EventInfo info) CloneEventWithMetadata(
+                (RuntimeEvent e, EventInfo info) ev)
+            {
+                var clonedEvent = ev.e?.Snapshot();
+                EventInfo clonedInfo = null;
+
+                if (ev.info != null)
+                {
+                    if (clonedEvent == null)
+                    {
+                        throw new PInternalException(
+                            "Cannot clone event metadata without its event");
+                    }
+
+                    var origin = ev.info.OriginInfo;
+                    clonedInfo = origin == null
+                        ? new EventInfo(clonedEvent)
+                        : new EventInfo(
+                            clonedEvent,
+                            new EventOriginInfo(
+                                origin.SenderStateMachineId,
+                                origin.SenderStateMachineName,
+                                origin.SenderStateName),
+                            ev.info.VectorTime);
+                }
+
+                return (clonedEvent, clonedInfo);
+            }
+
+            public void OnSentEvent((RuntimeEvent e, EventInfo) ev)
+            {
+                Inbox.Add(ev);
+            }
+
+            public void OnReceive(Dictionary<Type, Func<RuntimeEvent, bool>> receivePredicates)
+            {
+                CurrentStatus = Status.BlockedOnReceive;
+                ReceivePredicates = receivePredicates;
+            }
+
+            public void OnCompleteHandler()
+            {
+                if (CurrentStatus != Status.Halted)
+                {
+                    CurrentStatus = Status.Idle;
+                }
+                InProgressEvent = (null, null);
+            }
+
+            public void OnHalt()
+            {
+                CurrentStatus = Status.Halted;
+            }
+
+            public void OnInit(RuntimeEvent initialEvent)
+            {
+                CurrentStatus = Status.Initializing;
+                InProgressEvent = (initialEvent, null);
+            }
+
+            public void OnEventDelivered((RuntimeEvent e, EventInfo info) ev)
+            {
+                if (CurrentStatus == Status.Halted) return;
+
+                RemoveOrThrow(ev);
+                CurrentStatus = Status.HandlingEvent;
+                InProgressEvent = ev;
+            }
+
+            public void OnReceiveCompletion((RuntimeEvent e, EventInfo info) ev)
+            {
+                RemoveOrThrow(ev);
+                CurrentStatus = Status.HandlingEvent;
+                ReceivePredicates = null;
+            }
+
+            private void RemoveOrThrow((RuntimeEvent e, EventInfo info) ev)
+            {
+                if (!Inbox.Remove(ev))
+                {
+                    throw new PInternalException("Event to remove not in inbox");
+                }
             }
         }
     }
