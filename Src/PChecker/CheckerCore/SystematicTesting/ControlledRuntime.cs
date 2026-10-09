@@ -967,6 +967,27 @@ namespace PChecker.SystematicTesting
         /// </summary>
         internal (Event e, EventInfo info) GetNextEvent(StateMachine stateMachine)
         {
+            var operation = Scheduler.GetOperationWithId<StateMachineOperation>(stateMachine.Id.Value);
+
+            // If event handler finished and was restarted due to a scheduled 
+            // event delivery, don't call the scheduler again; this machine has
+            // already been scheduled
+            if (operation.SkipNextReceiveSchedulingPoint)
+            {
+                operation.SkipNextReceiveSchedulingPoint = false;
+
+                if (Scheduler.LastSchedulingChoice is DeliverEventChoice scheduledDelivery &&
+                    scheduledDelivery.StateMachineId.Equals(stateMachine.Id))
+                {
+                    ResetProgramCounter(stateMachine);
+                    return scheduledDelivery.EventToDeliver;
+                }
+
+                throw new PInternalException(
+                    $"State machine '{stateMachine.Id}' was restarted with a pending receive " +
+                    $"but the last scheduling choice was '{Scheduler.LastSchedulingChoice?.GetType().Name}'.");
+            }
+
             Scheduler.ScheduleNextEnabledOperation(AsyncOperationType.Receive);
             ResetProgramCounter(stateMachine);
             var nextChoice = Scheduler.LastSchedulingChoice;

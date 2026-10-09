@@ -17,7 +17,7 @@
     },
     "P Check MonitorGuided": {
       "commandName": "Project",
-      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 -s 100 -ms 1000 --inbox-type eventset --sch-monitorguided",
+      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 -s 100 -ms 1000 --inbox-type eventset --sch-monitorguided --debug --verbose > out.txt",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
     }
   }

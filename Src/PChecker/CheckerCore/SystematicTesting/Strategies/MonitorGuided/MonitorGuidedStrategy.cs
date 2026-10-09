@@ -64,7 +64,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         {
             // JR TODO: Add these to CheckerConfiguration
             maxObservedEventsForMonitorExploration = 100;
-            maxRecursionDepthForProgressComputation = 10;
+            maxRecursionDepthForProgressComputation = 5;
             _maxScheduledSteps = maxScheduledSteps;
             _predictor = new ExactPredictor();
             _solver = new Z3Solver();
@@ -182,6 +182,10 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             next = candidateChoices[_random.Next(candidateChoices.Count)];
             _scheduledSteps++;
             UpdateStatesFromChoice(next, _machineStates);
+
+            Debug.WriteLine(
+                $"<MonitorGuidedStrategy> Chose {next} with progress value {maxProgressValue}");
+
             return true;
         }
 
@@ -215,6 +219,10 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             if (recursionDepth > maxRecursionDepthForProgressComputation ||
                 candidateChoice is not StateMachineSchedulingChoice candidateMachineChoice)
                 return 0;
+
+            Debug.WriteLine(
+                $"<MonitorGuidedStrategy> Computing progress for {candidateChoice} " +
+                $"at recursion depth {recursionDepth}");
 
             var candidatePath = candidateMachineChoice.GetCreationPath();
             var candidateState = GetStateOrThrow(candidatePath, machineStates);
@@ -720,30 +728,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             private static (RuntimeEvent e, EventInfo info) CloneEventWithMetadata(
                 (RuntimeEvent e, EventInfo info) ev)
             {
-                var clonedEvent = ev.e?.Snapshot();
-                EventInfo clonedInfo = null;
-
-                if (ev.info != null)
-                {
-                    if (clonedEvent == null)
-                    {
-                        throw new PInternalException(
-                            "Cannot clone event metadata without its event");
-                    }
-
-                    var origin = ev.info.OriginInfo;
-                    clonedInfo = origin == null
-                        ? new EventInfo(clonedEvent)
-                        : new EventInfo(
-                            clonedEvent,
-                            new EventOriginInfo(
-                                origin.SenderStateMachineId,
-                                origin.SenderStateMachineName,
-                                origin.SenderStateName),
-                            ev.info.VectorTime);
-                }
-
-                return (clonedEvent, clonedInfo);
+                // To preserve inbox entry identity, preserve info reference.
+                return (ev.e?.Snapshot(), ev.info);
             }
 
             public void OnSentEvent((RuntimeEvent e, EventInfo) ev)
