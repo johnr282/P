@@ -21,6 +21,21 @@ namespace Plang.Options
         /// </summary>
         internal static readonly string[] CheckerModes = { "bugfinding", "pex" };
 
+        internal static readonly string[] MonitorGuidedPredictors = { "exact", "null" };
+
+        internal static MonitorGuidedPredictorType ParseMonitorGuidedPredictor(string predictor)
+        {
+            switch (predictor.ToLowerInvariant())
+            {
+                case "exact":
+                    return MonitorGuidedPredictorType.Exact;
+                case "null":
+                    return MonitorGuidedPredictorType.Null;
+                default:
+                    throw new Exception($"Invalid monitor-guided predictor '{predictor}'.");
+            }
+        }
+
         /// <summary>
         /// Maps a <c>--mode</c> value to its <see cref="CheckerMode"/>. Throws if the mode is
         /// not one of <see cref="CheckerModes"/>.
@@ -129,6 +144,10 @@ namespace Plang.Options
             schedulingGroup.AddArgument("sch-fairpct", null, "Choose the fair PCT scheduling strategy with given maximum number of priority switch points", typeof(uint));
             schedulingGroup.AddArgument("sch-rl", null, "Choose the reinforcement learning (RL) scheduling strategy", typeof(bool)).IsHidden = true;
             schedulingGroup.AddArgument("sch-monitorguided", null, "Choose the random scheduling strategy with monitor guidance", typeof(bool));
+
+            var predictors = schedulingGroup.AddArgument("sch-monitorguided-predictor", null,
+                "Choose the monitor-guided predictor (exact or null; default: exact)");
+            predictors.AllowedValues = MonitorGuidedPredictors.ToList();
 
             var schPEx = schedulingGroup.AddArgument("sch-pex", null, "Choose the scheduling strategy for PEx mode (options: random, dfs). (default: random)");
             schPEx.AllowedValues = new List<string>() { "random", "dfs", "astar" };
@@ -240,6 +259,10 @@ namespace Plang.Options
 
             switch (option.LongName)
             {
+                case "sch-monitorguided-predictor":
+                    checkerConfiguration.MonitorGuidedPredictor = ParseMonitorGuidedPredictor((string)option.Value);
+                    checkerConfiguration.IsMonitorGuidedPredictorSpecified = true;
+                    break;
                 case "outdir":
                     checkerConfiguration.OutputPath = (string)option.Value;
                     break;
@@ -438,6 +461,12 @@ namespace Plang.Options
         /// </summary>
         private static void SanitizeConfiguration(CheckerConfiguration checkerConfiguration)
         {
+            if (checkerConfiguration.IsMonitorGuidedPredictorSpecified &&
+                checkerConfiguration.SchedulingStrategy != StrategyType.MonitorGuided)
+            {
+                throw new Exception("The --sch-monitorguided-predictor option requires --sch-monitorguided.");
+            }
+
             if (checkerConfiguration.LivenessTemperatureThreshold == 0 &&
                 checkerConfiguration.MaxFairSchedulingSteps > 0)
             {

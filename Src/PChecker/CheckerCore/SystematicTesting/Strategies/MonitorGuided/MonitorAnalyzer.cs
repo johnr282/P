@@ -237,6 +237,126 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         }
 
         /// <summary>
+        /// Returns hard-coded guidance for Mutex monitor
+        /// </summary>
+        internal bool GetMutexMonitorGuidance(
+            string currentStateName,
+            out MonitorGuidance guidance)
+        {
+            const string waitForHoldStateName = "WaitForHold";
+            const string waitForReleaseStateName = "WaitForRelease";
+            const string heldByFieldName = "heldBy";
+            const string nodeFieldName = "node";
+
+            guidance = null;
+
+            if (_monitorAST.Observes?.Events == null)
+            {
+                throw new PInternalException(
+                    $"Monitor '{_monitorAST.Name}' does not declare observed events.");
+            }
+
+            var observedEvents = _monitorAST.Observes.Events.ToList();
+            var eHold = observedEvents.SingleOrDefault(e => e.Name == "eHold");
+            var eRelease = observedEvents.SingleOrDefault(e => e.Name == "eRelease");
+            if (observedEvents.Count != 2 || eHold == null || eRelease == null)
+            {
+                throw new PInternalException(
+                    $"Fake mutex guidance requires the monitor to observe only eHold and eRelease; " +
+                    $"monitor '{_monitorAST.Name}' observes: {string.Join(", ", observedEvents.Select(e => e.Name))}.");
+            }
+
+            bool HasIntegerNodePayload(ASTEvent eventType) =>
+                eventType.PayloadType.Canonicalize() is NamedTupleType payloadType &&
+                payloadType.LookupEntry(nodeFieldName, out var nodeEntry) &&
+                nodeEntry.Type.IsSameTypeAs(PrimitiveType.Int);
+
+            if (!HasIntegerNodePayload(eHold) || !HasIntegerNodePayload(eRelease))
+            {
+                throw new PInternalException(
+                    "Fake mutex guidance requires eHold and eRelease to have an integer 'node' payload field.");
+            }
+
+            var waitForHoldState = _monitorAST.GetState(waitForHoldStateName);
+            var waitForReleaseState = _monitorAST.GetState(waitForReleaseStateName);
+            if (waitForHoldState == null || waitForReleaseState == null)
+            {
+                throw new PInternalException(
+                    $"Fake mutex guidance requires states '{waitForHoldStateName}' and '{waitForReleaseStateName}'.");
+            }
+
+            var heldByField = _monitorAST.Fields.SingleOrDefault(
+                field => field.Name == heldByFieldName);
+            if (heldByField == null || !heldByField.Type.IsSameTypeAs(PrimitiveType.Int))
+            {
+                throw new PInternalException(
+                    $"Fake mutex guidance requires integer monitor field '{heldByFieldName}'.");
+            }
+
+            if (!waitForHoldState.AllEventHandlers.Any(handler => handler.Key.Name == eHold.Name) ||
+                !waitForReleaseState.AllEventHandlers.Any(handler => handler.Key.Name == eHold.Name))
+            {
+                throw new PInternalException(
+                    "Fake mutex guidance requires eHold handlers in both monitor states.");
+            }
+
+            SymEvent CreateEHold() => new(
+                eHold,
+                _symbolFactory.CreateFresh(eHold.PayloadType));
+
+            SymExpr GetNode(SymEvent e)
+            {
+                if (e.Payload is not NamedTupleExpr payload ||
+                    !payload.Fields.TryGetValue(nodeFieldName, out var node))
+                {
+                    throw new PInternalException(
+                        "Could not retrieve the 'node' field from the symbolic mutex event payload.");
+                }
+
+                return node;
+            }
+
+            List<(SymEvent e, State state)> violatingExecution = new();
+            SymExpr violatingCondition;
+
+            if (currentStateName == waitForHoldStateName)
+            {
+                SymEvent first = CreateEHold();
+                SymEvent second = CreateEHold();
+                violatingExecution.Add((first, waitForHoldState));
+                violatingExecution.Add((second, waitForReleaseState));
+
+                violatingCondition = SymExprFactory.Not(SymExprFactory.Equal(
+                    GetNode(first), GetNode(second)));
+            }
+            else if (currentStateName == waitForReleaseStateName)
+            {
+                SymEvent second = CreateEHold();
+                violatingExecution.Add((second, waitForReleaseState));
+
+                var fields = _fieldProvider.GetFieldValues();
+                if (!fields.TryGetValue(heldByFieldName, out var heldByValue) || heldByValue == null)
+                {
+                    throw new PInternalException(
+                        $"Missing concrete value for monitor field '{heldByFieldName}'.");
+                }
+
+                var heldByExpr = new ConcreteExpr(heldByValue, heldByField.Type);
+                violatingCondition = SymExprFactory.Not(SymExprFactory.Equal(
+                    heldByExpr, GetNode(second)));
+            }
+            else
+            {
+                throw new PInternalException(
+                    $"Unexpected current state '{currentStateName}' for fake mutex guidance. " +
+                    $"Expected '{waitForHoldStateName}' or '{waitForReleaseStateName}'.");
+            }
+
+            guidance = new(violatingExecution, violatingCondition);
+            return true;
+        }
+
+        /// <summary>
         /// Resets per-analysis analyzer state. 
         /// </summary>
         private void ResetAnalyzer()

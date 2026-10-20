@@ -11,7 +11,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_FILE = REPO_ROOT / "Src" / "PCompiler" / "PCommandLine" / "PCommandLine.csproj"
-STRATEGIES = ("--sch-random", "--sch-monitorguided")
+RANDOM_STRATEGY = ("random", ["--sch-random"])
+MONITOR_GUIDED_EXACT_STRATEGY = ("monitor-guided-exact", ["--sch-monitorguided"])
+MONITOR_GUIDED_NULL_STRATEGY = (
+    "monitor-guided-null",
+    ["--sch-monitorguided", "--sch-monitorguided-predictor", "null"],
+)
 
 
 def parse_summary(path: Path) -> dict[str, float]:
@@ -68,6 +73,8 @@ def main() -> int:
                         help="Schedules per run")
     parser.add_argument("--max-steps", type=int, required=True,
                         help="Maximum steps per schedule")
+    parser.add_argument("--test-null-predictor", action="store_true",
+                        help="Also test monitor-guided scheduling with the null predictor")
     args = parser.parse_args()
 
     dll = args.dll.expanduser().resolve()
@@ -88,11 +95,17 @@ def main() -> int:
     if build.returncode:
         return build.returncode
     all_results = {}
-    for strategy in STRATEGIES:
+    strategies = [RANDOM_STRATEGY, MONITOR_GUIDED_EXACT_STRATEGY]
+    if args.test_null_predictor:
+        strategies.append(MONITOR_GUIDED_NULL_STRATEGY)
+
+    print(f"Evaluating strategies {', '.join(name for name, _ in strategies)}")
+
+    for strategy_name, strategy_args in strategies:
         bug_schedules: list[float] = []
         bug_times: list[float] = []
         never_found = 0
-        print(f"\n{strategy}: {args.runs} runs")
+        print(f"\n{strategy_name}: {args.runs} runs")
         for run_index in range(1, args.runs + 1):
             started_at = time.time()
             # Give each invocation its own output folder. P Checker rotates
@@ -100,7 +113,7 @@ def main() -> int:
             # folders avoid that history management and preserve every run.
             run_output = (
                 output_parent / "PCheckerOutput" /
-                strategy.removeprefix("--") / f"run_{run_index:03d}"
+                strategy_name / f"run_{run_index:03d}"
             )
             command = [
                 "dotnet", "run", "--project", str(PROJECT_FILE),
@@ -111,7 +124,7 @@ def main() -> int:
                 "-ms", str(args.max_steps),
                 "--inbox-type", "eventset",
                 "--outdir", str(run_output),
-                strategy,
+                *strategy_args,
             ]
             try:
                 result = subprocess.run(
@@ -149,11 +162,11 @@ def main() -> int:
         print(summarize("Schedules to find a bug", bug_schedules))
         print(summarize("Time to find a bug (seconds)", bug_times))
         print(f"  Runs that never found a bug: {never_found}/{args.runs}")
-        all_results[strategy] = (bug_schedules, bug_times, never_found)
+        all_results[strategy_name] = (bug_schedules, bug_times, never_found)
 
     print("\nFinal summary (all strategies)")
-    for strategy, (bug_schedules, bug_times, never_found) in all_results.items():
-        print(f"\n{strategy}:")
+    for strategy_name, (bug_schedules, bug_times, never_found) in all_results.items():
+        print(f"\n{strategy_name}:")
         print(summarize("Schedules to find a bug", bug_schedules))
         print(summarize("Time to find a bug (seconds)", bug_times))
         print(f"  Runs that never found a bug: {never_found}/{args.runs}")

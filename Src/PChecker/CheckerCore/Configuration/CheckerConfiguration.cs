@@ -87,6 +87,15 @@ namespace PChecker.Configuration
         public StrategyType SchedulingStrategy { get;  set; }
 
         /// <summary>
+        /// Predictor used by the monitor-guided scheduling strategy.
+        /// </summary>
+        [DataMember]
+        public MonitorGuidedPredictorType MonitorGuidedPredictor { get; set; }
+
+        [IgnoreDataMember]
+        public bool IsMonitorGuidedPredictorSpecified { get; set; }
+
+        /// <summary>
         /// Number of testing schedules.
         /// </summary>
         [DataMember]
@@ -327,6 +336,7 @@ namespace PChecker.Configuration
 
             InboxType = InboxType.EventQueue;
             SchedulingStrategy = StrategyType.Random;
+            MonitorGuidedPredictor = MonitorGuidedPredictorType.Exact;
             TestingIterations = 1;
             RandomGeneratorSeed = null;
             IncrementalSchedulingSeed = false;

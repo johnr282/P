@@ -31,6 +31,7 @@ using PChecker.SystematicTesting.Strategies.Feedback;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
 //using PChecker.SystematicTesting.Strategies.Special;
 using PChecker.SystematicTesting.Strategies.MonitorGuided;
+using PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors;
 using PChecker.SystematicTesting.Traces;
 using PChecker.Utilities;
 using Debug = PChecker.IO.Debugging.Debug;
@@ -267,7 +268,15 @@ namespace PChecker.SystematicTesting
                 case StrategyType.MonitorGuided:
                     Strategy = new MonitorGuidedStrategy(
                         checkerConfiguration.MaxUnfairSchedulingSteps,
-                        RandomValueGenerator);
+                        RandomValueGenerator,
+                        checkerConfiguration.MonitorGuidedPredictor switch
+                        {
+                            MonitorGuidedPredictorType.Exact => new ExactPredictor(),
+                            MonitorGuidedPredictorType.Null => new NullPredictor(),
+                            var predictor => throw new InvalidOperationException(
+                                $"Unknown monitor-guided predictor '{predictor}'."),
+                        },
+                        fallbackStrategy: null);
                     break;
                 default:
                     Error.ReportAndExit(checkerConfiguration.SchedulingStrategy +

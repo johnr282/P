@@ -7,8 +7,8 @@
     },
     "Check MGS": {
       "commandName": "Project",
-      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided ",
-      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
+      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\MutualExclusion.dll -tc tcMultipleRequests --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided ",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\mutual-exclusion"
     },
     "Check MGS Verbose": {
       "commandName": "Project",
@@ -18,7 +18,7 @@
     "Compile": {
       "commandName": "Project",
       "commandLineArgs": "compile",
-      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\mutual-exclusion"
     },
     "Check Random Explore": {
       "commandName": "Project",

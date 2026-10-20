@@ -38,6 +38,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         // For now, assume that there is only one monitor.
         private Monitor _monitor;
         private MonitorAnalyzer _monitorAnalyzer;
+        private string _monitorName;
 
         private readonly Dictionary<MachineCreationPath, MachineState> 
             _machineStates = new();
@@ -53,20 +54,21 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private readonly ISchedulingStrategy _fallbackStrategy;
 
         public MonitorGuidedStrategy(int maxScheduledSteps, IRandomValueGenerator random)
-            : this(maxScheduledSteps, random, fallbackStrategy: null)
+            : this(maxScheduledSteps, random, new ExactPredictor(), fallbackStrategy: null)
         {
         }
 
         internal MonitorGuidedStrategy(
             int maxScheduledSteps,
             IRandomValueGenerator random,
+            IPredictor predictor,
             ISchedulingStrategy fallbackStrategy)
         {
             // JR TODO: Add these to CheckerConfiguration
             maxObservedEventsForMonitorExploration = 100;
             maxRecursionDepthForProgressComputation = 3;
             _maxScheduledSteps = maxScheduledSteps;
-            _predictor = new ExactPredictor();
+            _predictor = predictor;
             _solver = new Z3Solver();
             _random = random;
             _fallbackStrategy = fallbackStrategy ??
@@ -96,6 +98,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             }
 
             _monitor = monitor;
+            _monitorName = monitorAST.Name;
             _monitorAnalyzer = new MonitorAnalyzer(
                 monitorAST,
                 fieldProvider,
@@ -113,9 +116,15 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
             if (_guidance == null || !_guidance.Valid)
             {
-                bool monitorViolationFound = _monitorAnalyzer.GetLeaderMonitorGuidance(
-                    _monitor.CurrentStateName,
-                    out _guidance);
+                bool monitorViolationFound = _monitorName switch
+                {
+                    "OneLeaderPerElection" => _monitorAnalyzer.GetLeaderMonitorGuidance(
+                        _monitor.CurrentStateName, out _guidance),
+                    "Mutex" => _monitorAnalyzer.GetMutexMonitorGuidance(
+                        _monitor.CurrentStateName, out _guidance),
+                    _ => throw new PInternalException(
+                        $"Monitor-guided strategy does not support monitor '{_monitorName}'.")
+                };
 
                 if (!monitorViolationFound)
                 {
