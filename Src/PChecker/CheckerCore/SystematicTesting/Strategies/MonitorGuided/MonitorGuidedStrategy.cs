@@ -64,7 +64,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         {
             // JR TODO: Add these to CheckerConfiguration
             maxObservedEventsForMonitorExploration = 100;
-            maxRecursionDepthForProgressComputation = 5;
+            maxRecursionDepthForProgressComputation = 3;
             _maxScheduledSteps = maxScheduledSteps;
             _predictor = new ExactPredictor();
             _solver = new Z3Solver();
@@ -184,7 +184,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             UpdateStatesFromChoice(next, _machineStates);
 
             Debug.WriteLine(
-                $"<MonitorGuidedStrategy> Chose {next} with progress value {maxProgressValue}");
+                "{0}",
+                $"<MonitorGuidedStrategy> Chose {DescribeChoice(next)} with progress value {maxProgressValue}");
 
             return true;
         }
@@ -221,7 +222,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 return 0;
 
             Debug.WriteLine(
-                $"<MonitorGuidedStrategy> Computing progress for {candidateChoice} " +
+                "{0}",
+                $"<MonitorGuidedStrategy> Computing progress for {DescribeChoice(candidateChoice)} " +
                 $"at recursion depth {recursionDepth}");
 
             var candidatePath = candidateMachineChoice.GetCreationPath();
@@ -261,6 +263,16 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                    further progress computations will have no new opportunities 
                    to make progress.
                  */
+
+                string haltReason = progressFromCandidate == null
+                    ? "invalidates guidance"
+                    : newGuidance.ViolationReached
+                        ? "reaches a violation"
+                        : "has 0 progress and unknown prediction";
+                Debug.WriteLine(
+                    "{0}",
+                    $"<MonitorGuidedStrategy> Halting progress computation because choice {haltReason}");
+
                 return progressFromCandidate;
             }
 
@@ -672,6 +684,18 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             if (guidance == null || !guidance.Valid || observation.Ignored) return;
 
             UpdateGuidanceFromEvent(observation.ObservedEvent, guidance);
+        }
+
+        private static string DescribeChoice(SchedulingChoice choice)
+        {
+            return choice is StateMachineSchedulingChoice machineChoice
+                ? $"{{ {choice.GetType().Name}, {DescribeEvent(machineChoice.GetMonitoredEvent())} }}"
+                : choice.GetType().Name;
+        }
+
+        private static string DescribeEvent(RuntimeEvent e)
+        {
+            return e == null ? "null" : $"{{ {e.GetType().Name}, {e.Payload} }}";
         }
 
         private class MachineState

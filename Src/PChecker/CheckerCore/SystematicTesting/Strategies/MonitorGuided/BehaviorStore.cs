@@ -157,14 +157,15 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 current = nextNode;
             }
 
-            
-
             if (!current.AddBehavior(newChoice, effects, completeBehavior))
             {
-                throw new PInternalException(
-                    $"Inconsistent behavior for choice {newChoice} in trace " +
-                    $"{string.Join(", ", trace)}. Recorded: {string.Join(", ", current.Effects)}" +
-                    $", observed: {string.Join(", ", effects)}");
+                // JR TODO: Figure out how to handle choose operation; for now,
+                // ignore inconsistent behavior
+
+                //throw new PInternalException(
+                //    $"Inconsistent behavior for choice {newChoice} in trace " +
+                //    $"{string.Join(", ", trace)}. Recorded: {string.Join(", ", current.Effects)}" +
+                //    $", observed: {string.Join(", ", effects)}");
             }
         }
 

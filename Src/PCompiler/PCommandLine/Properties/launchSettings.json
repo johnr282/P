@@ -1,23 +1,33 @@
 {
   "profiles": {
-    "P Compile": {
+    "Check Random": {
+      "commandName": "Project",
+      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 -s 1000 -ms 1000 --inbox-type eventset --sch-random",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
+    },
+    "Check MGS": {
+      "commandName": "Project",
+      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided ",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
+    },
+    "Check MGS Verbose": {
+      "commandName": "Project",
+      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 --timeout 30 -s 1 -ms 1000 --inbox-type eventset --sch-monitorguided --debug --verbose > out.txt",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
+    },
+    "Compile": {
       "commandName": "Project",
       "commandLineArgs": "compile",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
     },
-    "RegressionTest": {
+    "Check Random Explore": {
       "commandName": "Project",
-      "commandLineArgs": "check net8.0/receive11.dll -tc DefaultImpl -s 4 --max-steps 1000 --seed 3243406786 -v -o PCheckerOutput",
-      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\P\\Tst\\temp_builds\\PChecker\\RegressionTests\\Feature2Stmts\\Correct\\receive11\\PChecker"
-    },
-    "P Check Random": {
-      "commandName": "Project",
-      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 -s 100 -ms 1000 --inbox-type eventset --sch-random",
+      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 -s 100 -ms 1000 --inbox-type eventset --sch-random --explore",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
     },
-    "P Check MonitorGuided": {
+    "Check MGS Explore": {
       "commandName": "Project",
-      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 -s 100 -ms 1000 --inbox-type eventset --sch-monitorguided --debug --verbose > out.txt",
+      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 -s 3 -ms 1000 --inbox-type eventset --sch-monitorguided --explore",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
     }
   }
