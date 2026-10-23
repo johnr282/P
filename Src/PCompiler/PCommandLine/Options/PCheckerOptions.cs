@@ -148,8 +148,6 @@ namespace Plang.Options
             var predictors = schedulingGroup.AddArgument("sch-monitorguided-predictor", null,
                 "Choose the monitor-guided predictor (exact or null; default: exact)");
             predictors.AllowedValues = MonitorGuidedPredictors.ToList();
-            schedulingGroup.AddArgument("sch-monitorguided-compare-predictions", null,
-                "Compare monitor-guided progress with a second pass that disables predictions", typeof(bool));
 
             var schPEx = schedulingGroup.AddArgument("sch-pex", null, "Choose the scheduling strategy for PEx mode (options: random, dfs). (default: random)");
             schPEx.AllowedValues = new List<string>() { "random", "dfs", "astar" };
@@ -264,9 +262,6 @@ namespace Plang.Options
                 case "sch-monitorguided-predictor":
                     checkerConfiguration.MonitorGuidedPredictor = ParseMonitorGuidedPredictor((string)option.Value);
                     checkerConfiguration.IsMonitorGuidedPredictorSpecified = true;
-                    break;
-                case "sch-monitorguided-compare-predictions":
-                    checkerConfiguration.CompareMonitorGuidedPredictions = true;
                     break;
                 case "outdir":
                     checkerConfiguration.OutputPath = (string)option.Value;
@@ -470,12 +465,6 @@ namespace Plang.Options
                 checkerConfiguration.SchedulingStrategy != StrategyType.MonitorGuided)
             {
                 throw new Exception("The --sch-monitorguided-predictor option requires --sch-monitorguided.");
-            }
-
-            if (checkerConfiguration.CompareMonitorGuidedPredictions &&
-                checkerConfiguration.SchedulingStrategy != StrategyType.MonitorGuided)
-            {
-                throw new Exception("The --sch-monitorguided-compare-predictions option requires --sch-monitorguided.");
             }
 
             if (checkerConfiguration.LivenessTemperatureThreshold == 0 &&

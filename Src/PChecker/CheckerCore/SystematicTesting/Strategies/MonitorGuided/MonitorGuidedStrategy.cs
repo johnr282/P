@@ -45,15 +45,13 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
         private readonly IPredictor _predictor;
 
-        private ISolver _solver;
-        private readonly ISolver _comparisonSolver;
+        private readonly ISolver _solver;
 
         private MonitorGuidance _guidance;
 
         private readonly IRandomValueGenerator _random;
 
         private readonly ISchedulingStrategy _fallbackStrategy;
-        private readonly bool _comparePredictions;
         internal MonitorGuidedStatistics Statistics { get; } = new();
 
         public MonitorGuidedStrategy(int maxScheduledSteps, IRandomValueGenerator random)
@@ -65,21 +63,17 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             int maxScheduledSteps,
             IRandomValueGenerator random,
             IPredictor predictor,
-            ISchedulingStrategy fallbackStrategy,
-            bool comparePredictions = false)
+            ISchedulingStrategy fallbackStrategy)
         {
             // JR TODO: Add these to CheckerConfiguration
             maxObservedEventsForMonitorExploration = 100;
             maxRecursionDepthForProgressComputation = 3;
             _maxScheduledSteps = maxScheduledSteps;
             _solver = new Z3Solver(statistics: Statistics);
-            _comparisonSolver = comparePredictions ? new Z3Solver() : null;
-            Statistics.SetPredictionComparisonEnabled(comparePredictions);
             if (predictor is ExactPredictor)
                 ((ExactPredictor)predictor).AttachStatistics(Statistics);
             _predictor = predictor;
             _random = random;
-            _comparePredictions = comparePredictions;
             _fallbackStrategy = fallbackStrategy ??
                 new RandomStrategy(maxScheduledSteps, random);
         }
@@ -123,7 +117,10 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         {
             next = null;
             choices = choices.ToList();
-            Statistics.RecordSchedulingChoiceCount(choices.Count());
+            int choiceCount = choices.Count();
+            int uniqueChoiceCount = choices
+                .Distinct(BehaviorStoreComparers.ChoiceEquality)
+                .Count();
 
             if (_guidance == null || !_guidance.Valid)
             {
@@ -139,6 +136,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
                 if (!monitorViolationFound)
                 {
+                    Statistics.RecordSchedulingChoiceMetrics(
+                        choiceCount, uniqueChoiceCount, progressCacheHits: 0);
                     bool result = GetFallbackChoice(lastChoice, choices, out next);
                     if (result)
                     {
@@ -152,49 +151,24 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             int? maxProgressValue = null;
             bool hasPositiveProgress = false;
             List<SchedulingChoice> candidateChoices = new();
-            List<(int? WithPredictions, int? WithoutPredictions)> comparisonResults = new();
-            List<SchedulingChoice> noPredictionBestChoices = new();
-            int? noPredictionMaxProgress = null;
+            var progressCache = new Dictionary<SchedulingChoice, int?>(
+                BehaviorStoreComparers.ChoiceEquality);
+            int progressCacheHits = 0;
             foreach (var choice in choices)
             {
-                int? progressValue = ComputeProgress(
-                    choice,
-                    _guidance,
-                    _machineStates,
-                    recursionDepth: 1);
-
-                if (_comparePredictions)
+                int? progressValue;
+                if (!progressCache.TryGetValue(choice, out progressValue))
                 {
-                    int? withoutPredictions;
-                    var originalSolver = _solver;
-                    _solver = _comparisonSolver;
-                    try
-                    {
-                        withoutPredictions = ComputeProgress(
-                            choice,
-                            _guidance,
-                            _machineStates,
-                            recursionDepth: 1,
-                            usePredictions: false,
-                            recordStatistics: false);
-                    }
-                    finally
-                    {
-                        _solver = originalSolver;
-                    }
-                    comparisonResults.Add((progressValue, withoutPredictions));
-
-                    if (withoutPredictions != null &&
-                        (noPredictionMaxProgress == null || withoutPredictions > noPredictionMaxProgress))
-                    {
-                        noPredictionMaxProgress = withoutPredictions;
-                        noPredictionBestChoices.Clear();
-                        noPredictionBestChoices.Add(choice);
-                    }
-                    else if (withoutPredictions != null && withoutPredictions == noPredictionMaxProgress)
-                    {
-                        noPredictionBestChoices.Add(choice);
-                    }
+                    progressValue = ComputeProgress(
+                        choice,
+                        _guidance,
+                        _machineStates,
+                        recursionDepth: 1);
+                    progressCache.Add(choice, progressValue);
+                }
+                else
+                {
+                    progressCacheHits++;
                 }
 
                 Debug.WriteLine(
@@ -218,14 +192,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 }
             }
 
-            if (_comparePredictions)
-            {
-                bool bestChoiceSetChanged = candidateChoices.Count != noPredictionBestChoices.Count ||
-                    candidateChoices.Any(choice => !noPredictionBestChoices.Any(
-                        withoutPrediction => BehaviorStoreComparers.ChoiceEquality.Equals(
-                            choice, withoutPrediction)));
-                Statistics.RecordPredictionComparison(comparisonResults, bestChoiceSetChanged);
-            }
+            Statistics.RecordSchedulingChoiceMetrics(
+                choiceCount, uniqueChoiceCount, progressCacheHits);
 
             if (hasPositiveProgress)
                 Statistics.RecordPositiveProgressCall();
@@ -240,13 +208,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 bool result = GetFallbackChoice(lastChoice, choices, out next);
                 if (result)
                 {
-                    if (_comparePredictions)
-                    {
-                        var selectedChoice = next;
-                        bool selectedChoiceIsCounterfactualBest = noPredictionBestChoices.Any(
-                            choice => BehaviorStoreComparers.ChoiceEquality.Equals(selectedChoice, choice));
-                        Statistics.RecordSelectedChoiceComparison(selectedChoiceIsCounterfactualBest);
-                    }
                     UpdateStatesFromChoice(next, _machineStates);
                 }
 
@@ -264,13 +225,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             // Candidate choices all have equal non-null progress values, so they
             // are equally good choices; choose one at random
             next = candidateChoices[_random.Next(candidateChoices.Count)];
-            if (_comparePredictions)
-            {
-                var selectedChoice = next;
-                bool selectedChoiceIsCounterfactualBest = noPredictionBestChoices.Any(
-                    choice => BehaviorStoreComparers.ChoiceEquality.Equals(selectedChoice, choice));
-                Statistics.RecordSelectedChoiceComparison(selectedChoiceIsCounterfactualBest);
-            }
             _scheduledSteps++;
             UpdateStatesFromChoice(next, _machineStates);
             Statistics.RecordChoiceReturned(usedFallback: false);
@@ -303,9 +257,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             SchedulingChoice candidateChoice,
             MonitorGuidance guidance,
             Dictionary<MachineCreationPath, MachineState> machineStates,
-            int recursionDepth,
-            bool usePredictions = true,
-            bool recordStatistics = true)
+            int recursionDepth)
         {
             // JR TODO: Should RunTaskChoices get special handling? Computing
             // progress does not really make sense for them, so they would 
@@ -325,13 +277,12 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             var candidateState = GetStateOrThrow(candidatePath, machineStates);
 
             IReadOnlyList<ExecutionEffect> prediction = null;
-            bool knownPrediction = usePredictions && _predictor.PredictEffects(
+            bool knownPrediction = _predictor.PredictEffects(
                 candidatePath,
                 candidateState.Trace,
                 candidateMachineChoice,
                 out prediction);
-            if (recordStatistics)
-                Statistics.RecordComputeProgressPrediction(knownPrediction);
+            Statistics.RecordComputeProgressPrediction(knownPrediction);
 
             var newStates = CloneMachineStates(machineStates);
             var newGuidance = guidance.Clone();
@@ -346,9 +297,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 out int progressFromPredictedEffects,
                 out bool predictedEffectsInvalidatedGuidance);
 
-            if (recordStatistics && progressFromPredictedEffects > 0)
+            if (progressFromPredictedEffects > 0)
                 Statistics.RecordPositiveEffectProgressPrediction();
-            if (recordStatistics && predictedEffectsInvalidatedGuidance)
+            if (predictedEffectsInvalidatedGuidance)
                 Statistics.RecordPredictionInvalidatingGuidance();
 
             int? progressFromCandidate = newGuidance.Valid
@@ -378,7 +329,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                     "{0}",
                     $"<MonitorGuidedStrategy> Halting progress computation because choice {haltReason}");
 
-                if (recordStatistics && progressFromCandidate == null)
+                if (progressFromCandidate == null)
                     Statistics.RecordComputeProgressNullResult();
                 return progressFromCandidate;
             }
@@ -388,16 +339,13 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 c,
                 newGuidance,
                 newStates,
-                recursionDepth + 1,
-                usePredictions,
-                recordStatistics)).Max();
+                recursionDepth + 1)).Max();
 
             // If maxFutureProgress is null, then all future paths result in 
             // invalidating the guidance, making this progress irrelevant.
             if (maxFutureProgress == null)
             {
-                if (recordStatistics)
-                    Statistics.RecordComputeProgressNullResult();
+                Statistics.RecordComputeProgressNullResult();
                 return null;
             }
 

@@ -75,8 +75,6 @@ def main() -> int:
                         help="Maximum steps per schedule")
     parser.add_argument("--test-null-predictor", action="store_true",
                         help="Also test monitor-guided scheduling with the null predictor")
-    parser.add_argument("--compare-predictions", action="store_true",
-                        help="Enable the monitor-guided with/without predictions comparison")
     args = parser.parse_args()
 
     dll = args.dll.expanduser().resolve()
@@ -100,15 +98,6 @@ def main() -> int:
     strategies = [RANDOM_STRATEGY, MONITOR_GUIDED_EXACT_STRATEGY]
     if args.test_null_predictor:
         strategies.append(MONITOR_GUIDED_NULL_STRATEGY)
-    if args.compare_predictions:
-        strategies = [
-            (
-                f"{name}-compare-predictions",
-                strategy_args + ["--sch-monitorguided-compare-predictions"],
-            ) if name.startswith("monitor-guided-") else (name, strategy_args)
-            for name, strategy_args in strategies
-        ]
-
     print(f"Evaluating strategies {', '.join(name for name, _ in strategies)}")
 
     for strategy_name, strategy_args in strategies:

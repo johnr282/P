@@ -9,6 +9,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
     {
         private readonly HashSet<string> _solverFormulas = new(StringComparer.Ordinal);
         private readonly List<int> _choicesPerSchedulingCall = new();
+        private readonly List<double> _progressCacheHitRatesPerSchedulingCall = new();
+        private readonly List<int> _uniqueChoicesPerSchedulingCall = new();
 
         public long SolverCacheHits { get; private set; }
         public long SolverCacheMisses { get; private set; }
@@ -33,12 +35,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         public long TotalChoicesReturned { get; private set; }
         public long GuidanceInvalidations { get; private set; }
         public long CallsWithPositiveProgress { get; private set; }
-        public bool PredictionComparisonEnabled { get; private set; }
-        public long PredictionComparisonChoices { get; private set; }
-        public long PredictionChangedProgressScores { get; private set; }
-        public long PredictionInducedNullProgressResults { get; private set; }
-        public long DecisionsWithDifferentBestChoiceSets { get; private set; }
-        public long SelectedChoicesNotBestWithoutPredictions { get; private set; }
         public long SchedulingChoiceCalls => _choicesPerSchedulingCall.Count;
         public double MeanChoicesPerSchedulingCall => _choicesPerSchedulingCall.Count == 0
             ? 0
@@ -63,6 +59,18 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         public int MaxChoicesPerSchedulingCall => _choicesPerSchedulingCall.Count == 0
             ? 0
             : _choicesPerSchedulingCall.Max();
+        public double MeanProgressCacheHitRatePerSchedulingCall =>
+            _progressCacheHitRatesPerSchedulingCall.Count == 0
+                ? 0
+                : _progressCacheHitRatesPerSchedulingCall.Average();
+        public double MedianProgressCacheHitRatePerSchedulingCall =>
+            GetMedian(_progressCacheHitRatesPerSchedulingCall);
+        public double MeanUniqueChoicesPerSchedulingCall =>
+            _uniqueChoicesPerSchedulingCall.Count == 0
+                ? 0
+                : _uniqueChoicesPerSchedulingCall.Average();
+        public double MedianUniqueChoicesPerSchedulingCall =>
+            GetMedian(_uniqueChoicesPerSchedulingCall);
 
         public void RecordSolverCheck(string formulaKey, bool cacheHit)
         {
@@ -71,10 +79,41 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             else SolverCacheMisses++;
         }
 
-        public void RecordSchedulingChoiceCount(int choiceCount) =>
+        public void RecordSchedulingChoiceMetrics(
+            int choiceCount,
+            int uniqueChoiceCount,
+            int progressCacheHits)
+        {
             _choicesPerSchedulingCall.Add(choiceCount);
+            _uniqueChoicesPerSchedulingCall.Add(uniqueChoiceCount);
+            _progressCacheHitRatesPerSchedulingCall.Add(choiceCount == 0
+                ? 0
+                : (double)progressCacheHits / choiceCount);
+        }
 
-        public void SetPredictionComparisonEnabled(bool enabled) => PredictionComparisonEnabled = enabled;
+        private static double GetMedian(IReadOnlyCollection<double> values)
+        {
+            if (values.Count == 0)
+                return 0;
+
+            var sortedValues = values.OrderBy(value => value).ToArray();
+            int middle = sortedValues.Length / 2;
+            return sortedValues.Length % 2 == 0
+                ? (sortedValues[middle - 1] + sortedValues[middle]) / 2
+                : sortedValues[middle];
+        }
+
+        private static double GetMedian(IReadOnlyCollection<int> values)
+        {
+            if (values.Count == 0)
+                return 0;
+
+            var sortedValues = values.OrderBy(value => value).ToArray();
+            int middle = sortedValues.Length / 2;
+            return sortedValues.Length % 2 == 0
+                ? ((double)sortedValues[middle - 1] + sortedValues[middle]) / 2
+                : sortedValues[middle];
+        }
 
         public void RecordInconsistentBehavior() => InconsistentBehaviors++;
         public void RecordConsistentBehavior() => ConsistentBehaviors++;
@@ -94,27 +133,5 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             if (usedFallback) FallbackChoices++;
         }
 
-        public void RecordPredictionComparison(
-            IReadOnlyList<(int? WithPredictions, int? WithoutPredictions)> comparisons,
-            bool bestChoiceSetChanged)
-        {
-            foreach (var (withPredictions, withoutPredictions) in comparisons)
-            {
-                PredictionComparisonChoices++;
-                if (withPredictions != withoutPredictions)
-                    PredictionChangedProgressScores++;
-                if (withPredictions == null && withoutPredictions != null)
-                    PredictionInducedNullProgressResults++;
-            }
-
-            if (bestChoiceSetChanged)
-                DecisionsWithDifferentBestChoiceSets++;
-        }
-
-        public void RecordSelectedChoiceComparison(bool selectedChoiceIsCounterfactualBest)
-        {
-            if (!selectedChoiceIsCounterfactualBest)
-                SelectedChoicesNotBestWithoutPredictions++;
-        }
     }
 }

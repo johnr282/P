@@ -92,13 +92,6 @@ namespace PChecker.Configuration
         [DataMember]
         public MonitorGuidedPredictorType MonitorGuidedPredictor { get; set; }
 
-        /// <summary>
-        /// If true, monitor-guided runs also compute choice progress with
-        /// predictions disabled and report the counterfactual comparison.
-        /// </summary>
-        [DataMember]
-        public bool CompareMonitorGuidedPredictions { get; set; }
-
         [IgnoreDataMember]
         public bool IsMonitorGuidedPredictorSpecified { get; set; }
 
@@ -344,7 +337,6 @@ namespace PChecker.Configuration
             InboxType = InboxType.EventQueue;
             SchedulingStrategy = StrategyType.Random;
             MonitorGuidedPredictor = MonitorGuidedPredictorType.Exact;
-            CompareMonitorGuidedPredictions = false;
             TestingIterations = 1;
             RandomGeneratorSeed = null;
             IncrementalSchedulingSeed = false;
