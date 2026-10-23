@@ -25,6 +25,8 @@ namespace PChecker.Runtime.StateMachines
             CreationPath = creationPath.ToList().AsReadOnly();
         }
 
+        public override string ToString() => $"({string.Join(", ", CreationPath)})";
+
         public override bool Equals(object obj)
         {
             if (obj is not MachineCreationPath path) return false;

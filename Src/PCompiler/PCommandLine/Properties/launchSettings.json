@@ -5,20 +5,10 @@
       "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 -s 10 -ms 1000 --inbox-type eventset --sch-random",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
     },
-    "Check MGS": {
-      "commandName": "Project",
-      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\MutualExclusion.dll -tc tcMultipleRequests --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided ",
-      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\mutual-exclusion"
-    },
     "Check MGS Verbose": {
       "commandName": "Project",
       "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 --timeout 30 -s 1 -ms 1000 --inbox-type eventset --sch-monitorguided --debug --verbose > out.txt",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
-    },
-    "Compile": {
-      "commandName": "Project",
-      "commandLineArgs": "compile",
-      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\mutual-exclusion"
     },
     "Check Random Explore": {
       "commandName": "Project",
@@ -28,6 +18,36 @@
     "Check MGS Explore": {
       "commandName": "Project",
       "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 -s 3 -ms 1000 --inbox-type eventset --sch-monitorguided --explore",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
+    },
+    "Check MGS Mutex": {
+      "commandName": "Project",
+      "commandLineArgs": "check /home/johnr/purdue/research/misc-research/p-language/mutual-exclusion/PGenerated/MutualExclusion/ReliableDeterministic/PChecker/net8.0/MutualExclusionReliableNetworkDeterministicTimer.dll -tc tcMultipleRequests --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided --sch-monitorguided-compare-predictions",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\mutual-exclusion"
+    },
+    "Check Mgs Mutex Verbose": {
+      "commandName": "Project",
+      "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\MutualExclusion.dll -tc tcMultipleRequests --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided --debug --verbose > out.txt",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\mutual-exclusion"
+    },
+    "Compile Leader": {
+      "commandName": "Project",
+      "commandLineArgs": "compile --pproj LeaderElection-Unreliable-Nondeterministic.pproj",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
+    },
+    "Compile Mutex": {
+      "commandName": "Project",
+      "commandLineArgs": "compile --pproj MutualExclusion-Reliable-Deterministic.pproj",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\mutual-exclusion"
+    },
+    "Check MGS Leader Reliable": {
+      "commandName": "Project",
+      "commandLineArgs": "check .\\PGenerated\\LeaderElection\\ReliableDeterministic\\PChecker\\net8.0\\LeaderElectionReliableNetworkDeterministicTimer.dll -tc tcOneLeaderElection1 --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided --debug --verbose > reliable_out.txt",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
+    },
+    "Check MGS Leader Unreliable": {
+      "commandName": "Project",
+      "commandLineArgs": "check .\\PGenerated\\LeaderElection\\UnreliableNondeterministic\\PChecker\\net8.0\\LeaderElectionUnreliableNetworkNondeterministicTimer.dll -tc tcOneLeaderElection1 --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided --debug --verbose > unreliable_out.txt",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
     }
   }

@@ -134,13 +134,18 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// True if this is a complete behavior, meaning machine i finished its
         /// scheduled execution without interruption. False otherwise.
         /// </param>
+        /// <param name="matchedExistingBehavior">
+        /// True if this observation matched an already recorded behavior.
+        /// </param>
         /// <exception cref="PInternalException"></exception>
-        public void AddBehavior(
+        public bool AddBehavior(
             IReadOnlyList<SchedulingChoice> trace,
             SchedulingChoice newChoice,
             IReadOnlyList<ExecutionEffect> effects, 
-            bool completeBehavior)
+            bool completeBehavior,
+            out bool matchedExistingBehavior)
         {
+            matchedExistingBehavior = false;
             var current = _root;
 
             // Behaviors should be added for every new choice, so a node
@@ -157,6 +162,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 current = nextNode;
             }
 
+            bool behaviorExists = current.Transitions.ContainsKey(newChoice);
             if (!current.AddBehavior(newChoice, effects, completeBehavior))
             {
                 // JR TODO: Figure out how to handle choose operation; for now,
@@ -166,7 +172,10 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 //    $"Inconsistent behavior for choice {newChoice} in trace " +
                 //    $"{string.Join(", ", trace)}. Recorded: {string.Join(", ", current.Effects)}" +
                 //    $", observed: {string.Join(", ", effects)}");
+                return false;
             }
+            matchedExistingBehavior = behaviorExists;
+            return true;
         }
 
         /// <summary>

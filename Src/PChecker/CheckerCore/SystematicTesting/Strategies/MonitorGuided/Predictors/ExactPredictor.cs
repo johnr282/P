@@ -1,5 +1,6 @@
 ﻿using PChecker.Runtime.StateMachines;
 using PChecker.SystematicTesting.Operations;
+using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,6 +17,10 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
     {
         private readonly Dictionary<MachineCreationPath, BehaviorStore>
             _behaviorStores = new();
+        private MonitorGuidedStatistics _statistics;
+
+        internal ExactPredictor(MonitorGuidedStatistics statistics = null) => _statistics = statistics;
+        internal void AttachStatistics(MonitorGuidedStatistics statistics) => _statistics = statistics;
 
         /// <inheritdoc/>
         public bool PredictEffects(
@@ -53,11 +58,19 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
                 _behaviorStores[machinePath] = behaviorStore;
             }
 
-            behaviorStore.AddBehavior(
+            if (!behaviorStore.AddBehavior(
                 currentTrace,
                 executedChoice,
                 producedEffects,
-                completeObservation);
+                completeObservation,
+                out bool matchedExistingBehavior))
+            {
+                _statistics?.RecordInconsistentBehavior();
+            }
+            else if (matchedExistingBehavior)
+            {
+                _statistics?.RecordConsistentBehavior();
+            }
         }
     }
 }

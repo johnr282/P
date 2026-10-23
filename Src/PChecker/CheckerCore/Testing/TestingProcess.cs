@@ -5,10 +5,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading.Tasks;
 using PChecker.Configuration;
 using PChecker.IO.Debugging;
 using PChecker.SystematicTesting;
+using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using PChecker.Utilities;
 
 namespace PChecker.Testing
@@ -210,6 +212,15 @@ namespace PChecker.Testing
             var pintPath = directory + file + "_pchecker_summary.txt";
             Console.WriteLine($"..... Writing {pintPath}");
             File.WriteAllText(pintPath, testReport.GetSummaryText(Profiler));
+
+            if (TestingEngine.Strategy is MonitorGuidedStrategy monitorGuidedStrategy)
+            {
+                var statisticsPath = Path.Combine(directory, file + "_monitor_guided_statistics.json");
+                Console.WriteLine($"..... Writing {statisticsPath}");
+                File.WriteAllText(statisticsPath, JsonSerializer.Serialize(
+                    monitorGuidedStrategy.Statistics,
+                    new JsonSerializerOptions { WriteIndented = true }));
+            }
             
             Console.WriteLine($"... Elapsed {Profiler.GetElapsedTime()} sec.");
 

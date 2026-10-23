@@ -6,6 +6,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Z3;
 using PChecker.IO.Debugging;
+using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using PChecker.Runtime.Values;
 using Plang.Compiler.TypeChecker.AST.Expressions;
 using Plang.Compiler.TypeChecker.Types;
@@ -27,10 +28,12 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.
         private long _alphaEquivalentFormulaRepeatCount;
         private long _resultCacheHitCount;
         private long _solverCheckCount;
+        private readonly MonitorGuidedStatistics _statistics;
 
-        internal Z3Solver(uint timeoutMilliseconds = 1000)
+        internal Z3Solver(uint timeoutMilliseconds = 1000, MonitorGuidedStatistics statistics = null)
         {
             _timeoutMilliseconds = timeoutMilliseconds;
+            _statistics = statistics;
             _context = new Context();
         }
 
@@ -46,6 +49,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.
             }
 
             string exactKey = CreateFormulaKey(formula, alphaNormalizeSymbols: false);
+            bool cacheHit = _resultCache.TryGet(exactKey, out SatResult cachedResult);
+            _statistics?.RecordSolverCheck(exactKey, cacheHit);
 
             if (Debug.IsEnabled)
             {
@@ -70,7 +75,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.
                 Debug.WriteLine("{0}", FormatSymExpr(formula));
             }
 
-            if (_resultCache.TryGet(exactKey, out SatResult cachedResult))
+            if (cacheHit)
             {
                 _resultCacheHitCount++;
                 if (Debug.IsEnabled)

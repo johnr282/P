@@ -276,7 +276,8 @@ namespace PChecker.SystematicTesting
                             var predictor => throw new InvalidOperationException(
                                 $"Unknown monitor-guided predictor '{predictor}'."),
                         },
-                        fallbackStrategy: null);
+                        fallbackStrategy: null,
+                        comparePredictions: checkerConfiguration.CompareMonitorGuidedPredictions);
                     break;
                 default:
                     Error.ReportAndExit(checkerConfiguration.SchedulingStrategy +
