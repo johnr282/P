@@ -42,7 +42,7 @@
     },
     "Check MGS Leader Reliable": {
       "commandName": "Project",
-      "commandLineArgs": "check .\\PGenerated\\LeaderElection\\ReliableDeterministic\\PChecker\\net8.0\\LeaderElectionReliableNetworkDeterministicTimer.dll -tc tcOneLeaderElection1 --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided --debug --verbose > reliable_out.txt",
+      "commandLineArgs": "check .\\PGenerated\\LeaderElection\\ReliableDeterministic\\PChecker\\net8.0\\LeaderElectionReliableNetworkDeterministicTimer.dll -tc tcOneLeaderElection1 --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
     },
     "Check MGS Leader Unreliable": {

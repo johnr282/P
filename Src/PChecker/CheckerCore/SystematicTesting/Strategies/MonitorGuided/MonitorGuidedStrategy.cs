@@ -40,8 +40,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private MonitorAnalyzer _monitorAnalyzer;
         private string _monitorName;
 
-        private readonly Dictionary<MachineCreationPath, MachineState> 
-            _machineStates = new();
+        private readonly MachineStateMap _machineStates = new();
 
         private readonly IPredictor _predictor;
 
@@ -256,7 +255,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         private int? ComputeProgress(
             SchedulingChoice candidateChoice,
             MonitorGuidance guidance,
-            Dictionary<MachineCreationPath, MachineState> machineStates,
+            MachineStateMap machineStates,
             int recursionDepth)
         {
             // JR TODO: Should RunTaskChoices get special handling? Computing
@@ -274,7 +273,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 $"at recursion depth {recursionDepth}");
 
             var candidatePath = candidateMachineChoice.GetCreationPath();
-            var candidateState = GetStateOrThrow(candidatePath, machineStates);
+            var candidateState = machineStates.GetReadOnlyState(candidatePath);
 
             IReadOnlyList<ExecutionEffect> prediction = null;
             bool knownPrediction = _predictor.PredictEffects(
@@ -284,7 +283,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 out prediction);
             Statistics.RecordComputeProgressPrediction(knownPrediction);
 
-            var newStates = CloneMachineStates(machineStates);
+            var newStates = machineStates.Fork();
             var newGuidance = guidance.Clone();
             int startingGuidanceIndex = newGuidance.GuidanceIndex;
 
@@ -356,7 +355,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             StateMachineSchedulingChoice choice,
             bool knownPrediction,
             IReadOnlyList<ExecutionEffect> prediction,
-            Dictionary<MachineCreationPath, MachineState> machineStates,
+            MachineStateMap machineStates,
             MonitorGuidance guidance,
             out int progressFromPredictedEffects,
             out bool predictedEffectsInvalidatedGuidance)
@@ -635,7 +634,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             var creationPath = lastChoice.GetCreationPath();
             if (creationPath == null) return;
 
-            var machineState = GetStateOrThrow(creationPath, _machineStates);
+            var machineState = _machineStates.GetReadOnlyState(creationPath);
             // lastChoice is already added to machine trace, so don't pass full
             // trace to predictor
             var machineTrace = machineState.Trace[0..^1];
@@ -658,15 +657,15 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
         private void UpdateStatesAndGuidanceFromEffect(
             ExecutionEffect effect,
-            Dictionary<MachineCreationPath, MachineState> machineStates,
+            MachineStateMap machineStates,
             MonitorGuidance guidance)
         {
             switch (effect)
             {
                 case SendEffect send:
                     {
-                        var targetState = GetStateOrThrow(
-                            send.TargetStateMachineId.CreationPath, machineStates);
+                        var targetState = machineStates.GetWritableState(
+                            send.TargetStateMachineId.CreationPath);
                         targetState.OnSentEvent(send.SentEvent);
                         break;
                     }
@@ -689,24 +688,24 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                     }
                 case BlockOnReceiveEffect receive:
                     {
-                        var blockedState = GetStateOrThrow(
-                           effect.StateMachineId.CreationPath, machineStates);
+                        var blockedState = machineStates.GetWritableState(
+                           effect.StateMachineId.CreationPath);
                         blockedState.OnReceive(receive.ReceivePredicates.ToDictionary());
                         break;
                     }
 
                 case CompleteHandlerEffect complete:
                     {
-                        var completedState = GetStateOrThrow(
-                           effect.StateMachineId.CreationPath, machineStates);
+                        var completedState = machineStates.GetWritableState(
+                           effect.StateMachineId.CreationPath);
                         completedState.OnCompleteHandler();
                         break;
                     }
 
                 case HaltEffect haltEffect:
                     {
-                        var haltedState = GetStateOrThrow(
-                           effect.StateMachineId.CreationPath, machineStates);
+                        var haltedState = machineStates.GetWritableState(
+                           effect.StateMachineId.CreationPath);
                         haltedState.OnHalt();
                         break;
                     }
@@ -718,12 +717,12 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         }
 
         private static void UpdateStatesFromChoice(SchedulingChoice choice,
-            Dictionary<MachineCreationPath, MachineState> machineStates)
+            MachineStateMap machineStates)
         {
             var machinePath = choice.GetCreationPath();
             if (machinePath == null) return;
 
-            var state = GetStateOrThrow(machinePath, machineStates);
+            var state = machineStates.GetWritableState(machinePath);
             state.Trace.Add(choice);
 
             switch (choice)
@@ -750,22 +749,69 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             }
         }
 
-        private static MachineState GetStateOrThrow(MachineCreationPath path,
-            Dictionary<MachineCreationPath, MachineState> machineStates)
+        private sealed class MachineStateMap : IReadOnlyDictionary<MachineCreationPath, MachineState>
         {
-            if (!machineStates.TryGetValue(path, out var state))
-            {
-                throw new PInternalException("Machine state not found");
-            }
-            return state;
-        }
+            private readonly Dictionary<MachineCreationPath, MachineState> _states;
+            private readonly HashSet<MachineCreationPath> _ownedStates;
 
-        private static Dictionary<MachineCreationPath, MachineState> CloneMachineStates(
-            IReadOnlyDictionary<MachineCreationPath, MachineState> machineStates)
-        {
-            return machineStates.ToDictionary(
-                pair => pair.Key,
-                pair => pair.Value.Clone());
+            public MachineStateMap()
+            {
+                _states = new();
+            }
+
+            private MachineStateMap(Dictionary<MachineCreationPath, MachineState> states)
+            {
+                _states = states;
+                _ownedStates = new();
+            }
+
+            public MachineStateMap Fork() => new(new Dictionary<MachineCreationPath, MachineState>(_states));
+
+            public MachineState this[MachineCreationPath path]
+            {
+                get => _states[path];
+                set
+                {
+                    _states[path] = value;
+                    _ownedStates?.Add(path);
+                }
+            }
+
+            public int Count => _states.Count;
+            public IEnumerable<MachineCreationPath> Keys => _states.Keys;
+            public IEnumerable<MachineState> Values => _states.Values;
+            public bool ContainsKey(MachineCreationPath path) => _states.ContainsKey(path);
+            public bool TryGetValue(MachineCreationPath path, out MachineState state) => _states.TryGetValue(path, out state);
+            public IEnumerator<KeyValuePair<MachineCreationPath, MachineState>> GetEnumerator() => _states.GetEnumerator();
+            System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+
+            public void Clear()
+            {
+                _states.Clear();
+                _ownedStates?.Clear();
+            }
+
+            public MachineState GetReadOnlyState(MachineCreationPath path)
+            {
+                if (!_states.TryGetValue(path, out var state))
+                    throw new PInternalException("Machine state not found");
+
+                return state;
+            }
+
+            public MachineState GetWritableState(MachineCreationPath path)
+            {
+                if (!_states.TryGetValue(path, out var state))
+                    throw new PInternalException("Machine state not found");
+
+                if (_ownedStates != null && _ownedStates.Add(path))
+                {
+                    state = state.Clone();
+                    _states[path] = state;
+                }
+
+                return state;
+            }
         }
 
         /// <summary>
@@ -851,29 +897,20 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
             public MachineState Clone()
             {
-                var clone = new MachineState(Id, InitialEvent?.Snapshot())
+                var clone = new MachineState(Id, InitialEvent)
                 {
                     CurrentStatus = CurrentStatus,
-                    InProgressEvent = CloneEventWithMetadata(InProgressEvent),
-                    ReceivePredicates = ReceivePredicates == null
-                        ? null
-                        : new Dictionary<Type, Func<RuntimeEvent, bool>>(ReceivePredicates)
+                    InProgressEvent = InProgressEvent,
+                    ReceivePredicates = ReceivePredicates
                 };
 
-                clone.Trace.AddRange(Trace.Select(choice => choice.Snapshot()));
+                clone.Trace.AddRange(Trace);
                 foreach (var ev in Inbox)
                 {
-                    clone.Inbox.Add(CloneEventWithMetadata(ev));
+                    clone.Inbox.Add(ev);
                 }
 
                 return clone;
-            }
-
-            private static (RuntimeEvent e, EventInfo info) CloneEventWithMetadata(
-                (RuntimeEvent e, EventInfo info) ev)
-            {
-                // To preserve inbox entry identity, preserve info reference.
-                return (ev.e?.Snapshot(), ev.info);
             }
 
             public void OnSentEvent((RuntimeEvent e, EventInfo) ev)
