@@ -191,11 +191,12 @@ namespace PChecker.SystematicTesting
             LastSchedulingChoice = nextChoice;
             PendingObservationChoice = nextChoice.Snapshot();
             HasPendingObservation = true;
+            // Record before notifying monitors: event announcement can itself
+            // expose a bug and throw before the selected choice executes.
+            ScheduleTrace.AddSchedulingChoice(nextChoice.OperationId, nextChoice.ChoiceId);
             HandleEventDeliveryChoice(nextChoice);
 
             var nextOp = OperationMap[nextChoice.OperationId];
-            // JR TODO: Need to record the choice, not only the operation
-            ScheduleTrace.AddSchedulingChoice(nextOp.Id);
 
             Debug.WriteLine($"<ScheduleDebug> Scheduling the next operation of '{nextOp.Name}'.");
 
@@ -242,17 +243,22 @@ namespace PChecker.SystematicTesting
         /// </summary>
         private bool GetNextSchedulingChoice(out SchedulingChoice next)
         {
-            var choices = GetSchedulingChoices();
-            if (!choices.Any())
+            var choices = GetSchedulingChoices().ToList();
+            if (choices.Count == 0)
             {
                 next = null;
                 return false;
             }
 
-            return Strategy.GetNextSchedulingChoice(
+            if (!Strategy.GetNextSchedulingChoice(
                 LastSchedulingChoice,
                 choices,
-                out next);
+                out next))
+            {
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -277,7 +283,7 @@ namespace PChecker.SystematicTesting
             {
                 if (op is TaskOperation taskOp)
                 {
-                    choices.Add(new RunTaskChoice(taskOp.Id));
+                    choices.Add(new RunTaskChoice(taskOp.Id) { ChoiceId = 0 });
                 }
                 else if (op is StateMachineOperation machineOp)
                 {
@@ -339,6 +345,11 @@ namespace PChecker.SystematicTesting
                 {
                     choices.Add(new DeliverEventChoice(machineOp.Id, machineOp.StateMachine.Id, e));
                 }
+            }
+
+            for (var idx = 0; idx < choices.Count; idx++)
+            {
+                choices[idx].ChoiceId = idx;
             }
 
             return choices;

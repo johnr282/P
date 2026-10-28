@@ -24,6 +24,9 @@ namespace PChecker.SystematicTesting.Traces
         /// </summary>
         internal ulong ScheduledOperationId;
 
+        /// <summary>The id of the selected choice within its operation.</summary>
+        internal int ChoiceId;
+
         /// <summary>
         /// The non-deterministic boolean choice value. Only relevant if
         /// this is a choice schedule step.
@@ -50,13 +53,18 @@ namespace PChecker.SystematicTesting.Traces
         /// Creates a schedule step.
         /// </summary>
         internal static ScheduleStep CreateSchedulingChoice(int index, ulong scheduledStateMachineId)
+            => CreateSchedulingChoice(index, scheduledStateMachineId, 0);
+
+        internal static ScheduleStep CreateSchedulingChoice(int index, ulong scheduledOperationId,
+            int choiceId)
         {
             var scheduleStep = new ScheduleStep();
 
             scheduleStep.Index = index;
             scheduleStep.Type = ScheduleStepType.SchedulingChoice;
 
-            scheduleStep.ScheduledOperationId = scheduledStateMachineId;
+            scheduleStep.ScheduledOperationId = scheduledOperationId;
+            scheduleStep.ChoiceId = choiceId;
 
             scheduleStep.BooleanChoice = null;
             scheduleStep.IntegerChoice = null;

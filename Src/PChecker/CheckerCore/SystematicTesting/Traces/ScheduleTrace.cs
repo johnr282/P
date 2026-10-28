@@ -69,8 +69,19 @@ namespace PChecker.SystematicTesting.Traces
                 }
                 else
                 {
-                    var id = step.TrimStart('(').TrimEnd(')');
-                    AddSchedulingChoice(ulong.Parse(id));
+                    var choice = step.TrimStart('(').TrimEnd(')').Split('|');
+                    if (choice.Length == 1)
+                    {
+                        AddSchedulingChoice(ulong.Parse(choice[0]));
+                    }
+                    else if (choice.Length == 2)
+                    {
+                        AddSchedulingChoice(ulong.Parse(choice[0]), int.Parse(choice[1]));
+                    }
+                    else
+                    {
+                        throw new System.FormatException($"Invalid scheduling choice trace step '{step}'.");
+                    }
                 }
             }
         }
@@ -82,6 +93,11 @@ namespace PChecker.SystematicTesting.Traces
         {
             var scheduleStep = ScheduleStep.CreateSchedulingChoice(Count, scheduledStateMachineId);
             Push(scheduleStep);
+        }
+
+        internal void AddSchedulingChoice(ulong operationId, int choiceId)
+        {
+            Push(ScheduleStep.CreateSchedulingChoice(Count, operationId, choiceId));
         }
 
         /// <summary>

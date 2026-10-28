@@ -20,11 +20,6 @@
       "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\LeaderElection.dll -tc tcOneLeaderElection1 -s 3 -ms 1000 --inbox-type eventset --sch-monitorguided --explore",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
     },
-    "Check MGS Mutex": {
-      "commandName": "Project",
-      "commandLineArgs": "check /home/johnr/purdue/research/misc-research/p-language/mutual-exclusion/PGenerated/MutualExclusion/ReliableDeterministic/PChecker/net8.0/MutualExclusionReliableNetworkDeterministicTimer.dll -tc tcMultipleRequests --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided",
-      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\mutual-exclusion"
-    },
     "Check Mgs Mutex Verbose": {
       "commandName": "Project",
       "commandLineArgs": "check .\\PGenerated\\PChecker\\net8.0\\MutualExclusion.dll -tc tcMultipleRequests --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided --debug --verbose > out.txt",
@@ -37,7 +32,7 @@
     },
     "Compile Mutex": {
       "commandName": "Project",
-      "commandLineArgs": "compile --pproj MutualExclusion-Reliable-Deterministic.pproj",
+      "commandLineArgs": "compile --pproj MutualExclusion-Unreliable-Nondeterministic.pproj",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\mutual-exclusion"
     },
     "Check MGS Leader Reliable": {
@@ -49,6 +44,21 @@
       "commandName": "Project",
       "commandLineArgs": "check .\\PGenerated\\LeaderElection\\UnreliableNondeterministic\\PChecker\\net8.0\\LeaderElectionUnreliableNetworkNondeterministicTimer.dll -tc tcOneLeaderElection1 --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided --debug --verbose > unreliable_out.txt",
       "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\leader-election"
+    },
+    "Check MGS Mutex Unreliable": {
+      "commandName": "Project",
+      "commandLineArgs": "check .\\PGenerated\\MutualExclusion\\UnreliableNondeterministic\\PChecker\\net8.0\\MutualExclusionUnreliableNetworkNondeterministicTimer.dll -tc tcMultipleRequests --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\mutual-exclusion"
+    },
+    "Check MGS Mutex Reliable": {
+      "commandName": "Project",
+      "commandLineArgs": "check .\\PGenerated\\MutualExclusion\\ReliableDeterministic\\PChecker\\net8.0\\MutualExclusionReliableNetworkDeterministicTimer.dll -tc tcMultipleRequests --timeout 30 -s 1000 -ms 1000 --inbox-type eventset --sch-monitorguided",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\misc-research\\p-language\\mutual-exclusion"
+    },
+    "Compile 2PC": {
+      "commandName": "Project",
+      "commandLineArgs": "compile --pproj LeaderElection-Unreliable-Nondeterministic.pproj",
+      "workingDirectory": "C:\\Users\\johnr\\Documents\\purdue\\research\\P\\Tutorial\\2_TwoPhaseCommit"
     }
   }
 }

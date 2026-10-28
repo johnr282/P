@@ -19,6 +19,12 @@ namespace PChecker.SystematicTesting.Operations
         public ulong OperationId { get; }
 
         /// <summary>
+        /// Identifies this choice among the choices for the same operation.
+        /// Assigned when the scheduler constructs the enabled choices.
+        /// </summary>
+        public int ChoiceId { get; internal set; }
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="SchedulingChoice"/> class.
         /// </summary>
         protected SchedulingChoice(ulong operationId)

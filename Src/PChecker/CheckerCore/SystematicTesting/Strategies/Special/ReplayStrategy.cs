@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using PChecker.Configuration;
 using PChecker.IO.Debugging;
 using PChecker.SystematicTesting.Operations;
 using PChecker.SystematicTesting.Traces;
@@ -74,18 +75,13 @@ namespace PChecker.SystematicTesting.Strategies.Special
         }
 
         /// <inheritdoc/>
-        public bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next)
+        public bool GetNextSchedulingChoice(
+            SchedulingChoice lastChoice,
+            IEnumerable<SchedulingChoice> choices,
+            out SchedulingChoice next)
         {
             if (IsReplaying)
             {
-                var asyncOperations = ops.ToList();
-                var enabledOperations = asyncOperations.Where(op => op.Status is AsyncOperationStatus.Enabled).ToList();
-                if (enabledOperations.Count == 0)
-                {
-                    next = null;
-                    return false;
-                }
-
                 try
                 {
                     if (ScheduledSteps >= ScheduleTrace.Count)
@@ -101,10 +97,12 @@ namespace PChecker.SystematicTesting.Strategies.Special
                         throw new InvalidOperationException(ErrorText);
                     }
 
-                    next = enabledOperations.FirstOrDefault(op => op.Id == nextStep.ScheduledOperationId);
+                    next = choices.FirstOrDefault(choice =>
+                        choice.OperationId == nextStep.ScheduledOperationId &&
+                        choice.ChoiceId == nextStep.ChoiceId);
                     if (next is null)
                     {
-                        ErrorText = $"Trace is not reproducible: cannot detect id '{nextStep.ScheduledOperationId}'.";
+                        ErrorText = $"Trace is not reproducible: cannot detect choice '{nextStep.ScheduledOperationId}|{nextStep.ChoiceId}'.";
                         throw new InvalidOperationException(ErrorText);
                     }
                 }
@@ -122,18 +120,18 @@ namespace PChecker.SystematicTesting.Strategies.Special
                     }
 
                     IsReplaying = false;
-                    return SuffixStrategy.GetNextOperation(current, asyncOperations, out next);
+                    return SuffixStrategy.GetNextSchedulingChoice(lastChoice, choices, out next);
                 }
 
                 ScheduledSteps++;
                 return true;
             }
 
-            return SuffixStrategy.GetNextOperation(current, ops, out next);
+            return SuffixStrategy.GetNextSchedulingChoice(lastChoice, choices, out next);
         }
 
         /// <inheritdoc/>
-        public bool GetNextBooleanChoice(AsyncOperation current, int maxValue, out bool next)
+        public bool GetNextBooleanChoice(SchedulingChoice lastChoice, int maxValue, out bool next)
         {
             if (IsReplaying)
             {
@@ -174,7 +172,7 @@ namespace PChecker.SystematicTesting.Strategies.Special
                     }
 
                     IsReplaying = false;
-                    return SuffixStrategy.GetNextBooleanChoice(current, maxValue, out next);
+                    return SuffixStrategy.GetNextBooleanChoice(lastChoice, maxValue, out next);
                 }
 
                 next = nextStep.BooleanChoice.Value;
@@ -182,11 +180,11 @@ namespace PChecker.SystematicTesting.Strategies.Special
                 return true;
             }
 
-            return SuffixStrategy.GetNextBooleanChoice(current, maxValue, out next);
+            return SuffixStrategy.GetNextBooleanChoice(lastChoice, maxValue, out next);
         }
 
         /// <inheritdoc/>
-        public bool GetNextIntegerChoice(AsyncOperation current, int maxValue, out int next)
+        public bool GetNextIntegerChoice(SchedulingChoice lastChoice, int maxValue, out int next)
         {
             if (IsReplaying)
             {
@@ -227,7 +225,7 @@ namespace PChecker.SystematicTesting.Strategies.Special
                     }
 
                     IsReplaying = false;
-                    return SuffixStrategy.GetNextIntegerChoice(current, maxValue, out next);
+                    return SuffixStrategy.GetNextIntegerChoice(lastChoice, maxValue, out next);
                 }
 
                 next = nextStep.IntegerChoice.Value;
@@ -235,7 +233,7 @@ namespace PChecker.SystematicTesting.Strategies.Special
                 return true;
             }
 
-            return SuffixStrategy.GetNextIntegerChoice(current, maxValue, out next);
+            return SuffixStrategy.GetNextIntegerChoice(lastChoice, maxValue, out next);
         }
 
         /// <inheritdoc/>
@@ -281,6 +279,15 @@ namespace PChecker.SystematicTesting.Strategies.Special
             }
 
             return IsSchedulerFair;
+        }
+
+        /// <inheritdoc/>
+        public void NotifyEffects(
+            SchedulingChoice lastChoice,
+            IReadOnlyList<ExecutionEffect> effects,
+            bool completeBehavior)
+        {
+            // Replay does not use execution observations.
         }
 
         /// <inheritdoc/>

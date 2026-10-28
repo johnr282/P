@@ -29,7 +29,7 @@ using PChecker.SystematicTesting.Strategies;
 //using PChecker.SystematicTesting.Strategies.Exhaustive;
 using PChecker.SystematicTesting.Strategies.Feedback;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
-//using PChecker.SystematicTesting.Strategies.Special;
+using PChecker.SystematicTesting.Strategies.Special;
 using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors;
 using PChecker.SystematicTesting.Traces;
@@ -160,8 +160,7 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// Checks if the systematic testing engine is running in replay mode.
         /// </summary>
-        //private bool IsReplayModeEnabled => Strategy is ReplayStrategy;
-        private bool IsReplayModeEnabled => false;
+        private bool IsReplayModeEnabled => Strategy is ReplayStrategy;
 
         /// <summary>
         /// A guard for printing info.
@@ -278,19 +277,20 @@ namespace PChecker.SystematicTesting
                         },
                         fallbackStrategy: null);
                     break;
+                case StrategyType.Replay:
+                    var scheduleDump = GetScheduleForReplay(out var isFair);
+                    Strategy = new ReplayStrategy(
+                        checkerConfiguration,
+                        new ScheduleTrace(scheduleDump),
+                        isFair);
+                    break;
                 default:
                     Error.ReportAndExit(checkerConfiguration.SchedulingStrategy +
                         " is not available.");
                     break;
             }
 
-            //if (checkerConfiguration.SchedulingStrategy is "replay")
-            //{
-            //    var scheduleDump = GetScheduleForReplay(out var isFair);
-            //    var schedule = new ScheduleTrace(scheduleDump);
-            //    Strategy = new ReplayStrategy(checkerConfiguration, schedule, isFair);
-            //}
-            //else if (checkerConfiguration.SchedulingStrategy is "pct")
+            //if (checkerConfiguration.SchedulingStrategy is "pct")
             //{
             //    Strategy = new PCTStrategy(checkerConfiguration.MaxUnfairSchedulingSteps, checkerConfiguration.StrategyBound,
             //        RandomValueGenerator);
@@ -990,7 +990,7 @@ namespace PChecker.SystematicTesting
                 var step = runtime.Scheduler.ScheduleTrace[idx];
                 if (step.Type == ScheduleStepType.SchedulingChoice)
                 {
-                    stringBuilder.Append($"({step.ScheduledOperationId})");
+                    stringBuilder.Append($"({step.ScheduledOperationId}|{step.ChoiceId})");
                 }
                 else if (step.BooleanChoice != null)
                 {

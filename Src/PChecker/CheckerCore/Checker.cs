@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using PChecker.Configuration;
 using PChecker.IO.Debugging;
 using PChecker.IO.Logging;
@@ -35,6 +36,13 @@ public static class Checker
                 {
                     var engine = TestingEngine.Create(configuration);
                     engine.Run();
+                    if (engine.TestReport.NumOfFoundBugs > 0)
+                    {
+                        var file = Path.GetFileNameWithoutExtension(configuration.AssemblyToBeAnalyzed);
+                        file += "_" + configuration.TestingProcessId;
+                        logger.WriteLine("... Emitting traces:");
+                        engine.TryEmitTraces(configuration.OutputDirectory, file);
+                    }
                     Error.Write(logger, ConsoleColor.Yellow, engine.GetReport());
                 }
                     break;
