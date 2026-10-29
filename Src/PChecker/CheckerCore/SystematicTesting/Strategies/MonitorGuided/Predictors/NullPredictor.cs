@@ -1,5 +1,7 @@
 ﻿using PChecker.Runtime.StateMachines;
 using PChecker.SystematicTesting.Operations;
+using ASTEvent = Plang.Compiler.TypeChecker.AST.Declarations.Event;
+using RuntimeEvent = PChecker.Runtime.Events.Event;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +15,13 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
     /// </summary>
     internal class NullPredictor : IPredictor
     {
+        public IReadOnlyDictionary<BehaviorStore.BehaviorNode, List<RuntimeEvent>>
+            MonitorObservedBehaviors => new Dictionary<BehaviorStore.BehaviorNode, List<RuntimeEvent>>();
+
+        public void AttachStatistics(MonitorGuidedStatistics statistics) { }
+
+        public void SetMonitorObservedEvents(IReadOnlyList<ASTEvent> observedEvents) { }
+
         /// <inheritdoc/>
         public bool PredictEffects(
             MachineCreationPath machinePath,

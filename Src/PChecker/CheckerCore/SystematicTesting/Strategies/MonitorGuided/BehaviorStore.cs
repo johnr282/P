@@ -19,6 +19,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         {
             public Dictionary<SchedulingChoice, BehaviorNode> Transitions { get; } 
                 = new(BehaviorStoreComparers.ChoiceEquality);
+            public BehaviorNode Parent { get; }
+            public MachineCreationPath MachinePath { get; }
+            public SchedulingChoice Choice { get; }
             public IReadOnlyList<ExecutionEffect> Effects { get; }
 
             /// <summary>
@@ -29,9 +32,15 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
             public BehaviorNode(
                 IReadOnlyList<ExecutionEffect> effects, 
+                BehaviorNode parent,
+                MachineCreationPath machinePath,
+                SchedulingChoice choice,
                 bool completeBehavior)
             {
                 Effects = effects;
+                Parent = parent;
+                MachinePath = machinePath;
+                Choice = choice;
                 CompleteBehavior = completeBehavior;
             }
 
@@ -46,16 +55,26 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             public bool AddBehavior(
                 SchedulingChoice choice,
                 IReadOnlyList<ExecutionEffect> effects, 
-                bool completeBehavior)
+                bool completeBehavior,
+                MachineCreationPath machinePath,
+                out BehaviorNode previousNode,
+                out BehaviorNode newOrExistingNode)
             {
                 if (!Transitions.TryGetValue(choice, out var nextNode))
                 {
-                    Transitions[choice] = new BehaviorNode(effects, completeBehavior);
+                    previousNode = null;
+                    newOrExistingNode = new BehaviorNode(
+                        effects, this, machinePath, choice, completeBehavior);
+                    Transitions[choice] = newOrExistingNode;
                     return true;
                 }
 
+                previousNode = nextNode;
+
                 if (nextNode.CompleteBehavior)
                 {
+                    newOrExistingNode = nextNode;
+
                     if (completeBehavior)
                     {
                         // Existing and new behaviors are both complete, so they 
@@ -77,9 +96,13 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                     // behavior; existing should be a prefix of new
                     if (PrefixOf(nextNode.Effects, effects))
                     {
-                        Transitions[choice] = new BehaviorNode(effects, true);
+                        newOrExistingNode = new BehaviorNode(
+                            effects, this, machinePath, choice, true);
+                        Transitions[choice] = newOrExistingNode;
                         return true;
                     }
+
+                    newOrExistingNode = nextNode;
                     return false;
                 }
 
@@ -99,9 +122,13 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
                 if (PrefixOf(shorter, longer))
                 {
-                    Transitions[choice] = new BehaviorNode(longer, false);
+                    newOrExistingNode = new BehaviorNode(
+                        longer, this, machinePath, choice, false);
+                    Transitions[choice] = newOrExistingNode;
                     return true;
                 }
+
+                newOrExistingNode = nextNode;
                 return false;
             }
 
@@ -119,7 +146,14 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             }
         }
 
-        private BehaviorNode _root = new(new List<ExecutionEffect>(), true);
+        private readonly MachineCreationPath _machinePath;
+        private readonly BehaviorNode _root;
+
+        public BehaviorStore(MachineCreationPath machinePath)
+        {
+            _machinePath = machinePath;
+            _root = new(new List<ExecutionEffect>(), null, machinePath, null, true);
+        }
 
         /// <summary>
         /// Adds the given behavior to the store. The behavior represents the 
@@ -134,6 +168,13 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// True if this is a complete behavior, meaning machine i finished its
         /// scheduled execution without interruption. False otherwise.
         /// </param>
+        /// <param name="previousNode">
+        /// The node previously stored for this transition, or null if it is new.
+        /// </param>
+        /// <param name="newOrExistingNode">
+        /// The newly created or existing behavior node corresponding to the
+        /// added behavior.
+        /// </param>
         /// <param name="matchedExistingBehavior">
         /// True if this observation matched an already recorded behavior.
         /// </param>
@@ -143,6 +184,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             SchedulingChoice newChoice,
             IReadOnlyList<ExecutionEffect> effects, 
             bool completeBehavior,
+            out BehaviorNode previousNode,
+            out BehaviorNode newOrExistingNode,
             out bool matchedExistingBehavior)
         {
             matchedExistingBehavior = false;
@@ -163,7 +206,10 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             }
 
             bool behaviorExists = current.Transitions.ContainsKey(newChoice);
-            if (!current.AddBehavior(newChoice, effects, completeBehavior))
+            if (!current.AddBehavior(
+                newChoice, effects, completeBehavior, _machinePath,
+                out previousNode,
+                out newOrExistingNode))
             {
                 // JR TODO: Figure out how to handle choose operation; for now,
                 // ignore inconsistent behavior

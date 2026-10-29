@@ -101,6 +101,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
             _monitor = monitor;
             _monitorName = monitorAST.Name;
+            _predictor.SetMonitorObservedEvents(monitorAST.Observes.Events.ToList());
             _monitorAnalyzer = new MonitorAnalyzer(
                 monitorAST,
                 fieldProvider,

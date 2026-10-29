@@ -1,10 +1,14 @@
-﻿using PChecker.Runtime.StateMachines;
+﻿using PChecker.Runtime.Events;
+using PChecker.Runtime.StateMachines;
 using PChecker.SystematicTesting.Operations;
+using Plang.Compiler.TypeChecker.AST.Declarations;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using ASTEvent = Plang.Compiler.TypeChecker.AST.Declarations.Event;
+using RuntimeEvent = PChecker.Runtime.Events.Event;
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
 {
@@ -56,5 +60,12 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
             SchedulingChoice executedChoice,
             IReadOnlyList<ExecutionEffect> producedEffects,
             bool completeObservation);
+
+        void AttachStatistics(MonitorGuidedStatistics statistics);
+
+        void SetMonitorObservedEvents(IReadOnlyList<ASTEvent> observedEvents);
+
+        IReadOnlyDictionary<BehaviorStore.BehaviorNode, List<RuntimeEvent>>
+            MonitorObservedBehaviors { get; }
     }
 }
