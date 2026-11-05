@@ -20,7 +20,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
     {
         private readonly Dictionary<MachineCreationPath, BehaviorStore>
             _behaviorStores = new();
-        private readonly Dictionary<BehaviorStore.BehaviorNode, List<RuntimeEvent>>
+        private readonly HashSet<BehaviorStore.BehaviorNode>
             _monitorObservedBehaviors = new();
 
         private MonitorGuidedStatistics _statistics;
@@ -34,7 +34,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
         public void SetMonitorObservedEvents(IReadOnlyList<ASTEvent> observedEvents)
             => _observedEventTypes = observedEvents;
 
-        public IReadOnlyDictionary<BehaviorStore.BehaviorNode, List<RuntimeEvent>>
+        public IReadOnlySet<BehaviorStore.BehaviorNode>
             MonitorObservedBehaviors => _monitorObservedBehaviors;
 
         /// <inheritdoc/>
@@ -78,8 +78,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
                 executedChoice,
                 producedEffects,
                 completeObservation,
-                out var previousNode,
-                out var newOrExistingNode,
+                out var behaviorNode,
+                out bool behaviorChanged,
                 out bool matchedExistingBehavior);
 
             if (!behaviorAccepted)
@@ -93,17 +93,26 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
                 _statistics?.RecordConsistentBehavior();
             }
 
-            // A trie transition is replaced with a new node only when its
-            // stored behavior changes. Keep the index unchanged for repeated
-            // observations of the same node.
-            if (ReferenceEquals(previousNode, newOrExistingNode)) return;
+            if (!behaviorChanged) return;
 
-            if (previousNode != null)
-                _monitorObservedBehaviors.Remove(previousNode);
+            var observedEvents = GetMonitorObservedEvents(behaviorNode);
+            bool wasMonitorObserved = behaviorNode.MonitorObservedEvents.Count > 0;
+            behaviorNode.MonitorObservedEvents = observedEvents;
+            if (!wasMonitorObserved && observedEvents.Count > 0)
+                AddMonitorObservedBehavior(behaviorNode);
+        }
 
-            var observedEvents = GetMonitorObservedEvents(newOrExistingNode);
-            if (observedEvents.Count > 0)
-                _monitorObservedBehaviors.Add(newOrExistingNode, observedEvents);
+        private void AddMonitorObservedBehavior(
+            BehaviorStore.BehaviorNode behaviorNode)
+        {
+            _monitorObservedBehaviors.Add(behaviorNode);
+
+            var nearestObservedAncestor =
+                behaviorNode.LatestMonitorObservedAncestor;
+            if (nearestObservedAncestor != null)
+            {
+                _monitorObservedBehaviors.Remove(nearestObservedAncestor);
+            }
         }
 
         private List<RuntimeEvent> GetMonitorObservedEvents(

@@ -65,7 +65,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
 
         void SetMonitorObservedEvents(IReadOnlyList<ASTEvent> observedEvents);
 
-        IReadOnlyDictionary<BehaviorStore.BehaviorNode, List<RuntimeEvent>>
-            MonitorObservedBehaviors { get; }
+        /// <summary>
+        /// Returns the set of leaf behaviors that produce monitor-observed events.
+        /// </summary>
+        IReadOnlySet<BehaviorStore.BehaviorNode> MonitorObservedBehaviors { get; }
     }
 }

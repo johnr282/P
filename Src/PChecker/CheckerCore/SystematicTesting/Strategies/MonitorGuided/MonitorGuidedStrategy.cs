@@ -277,6 +277,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             var candidateState = machineStates.GetReadOnlyState(candidatePath);
 
             IReadOnlyList<ExecutionEffect> prediction = null;
+
+
+
             bool knownPrediction = _predictor.PredictEffects(
                 candidatePath,
                 candidateState.Trace,
@@ -350,6 +353,74 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             }
 
             return progressFromCandidate + maxFutureProgress;
+        }
+
+        private IReadOnlySet<BehaviorStore.BehaviorNode>ComputeUsefulBehaviors(
+            SchedulingChoice candidateChoice,
+            MonitorGuidance guidance,
+            MachineStateMap machineStates)
+        {
+            foreach (var behavior in _predictor.MonitorObservedBehaviors)
+            {
+                var machinePath = behavior.MachinePath;
+                if (!machineStates.TryGetValue(machinePath, out var machineState))
+                {
+                    // If behavior's machine has not been created yet, the behavior
+                    // is not currently reachable
+                    continue;
+                }
+                var currentTrace = machineState.Trace;
+
+                var ancestorBehaviors = BehaviorStore.GetMonitorObservedAncestors(behavior);
+                List<BehaviorStore.BehaviorNode> reachableAncestors = new();
+                List<SchedulingChoice> behaviorTrace = new();
+
+                for (int i = 0; i < ancestorBehaviors.Count; i++)
+                {
+                    var ancestorBehavior = ancestorBehaviors[i];
+                    var ancestorTrace = i == 0
+                        ? BehaviorStore.GetTrace(ancestorBehavior)
+                        : BehaviorStore.GetConnectingTrace(
+                            ancestorBehaviors[i - 1],
+                            ancestorBehavior);
+                    behaviorTrace.AddRange(ancestorTrace);
+
+                    // A behavior b of machine i may be reachable if i's current
+                    // trace in machineStates is a prefix of b's trace
+                    bool ancestorReachable = PrefixOf(
+                        currentTrace,
+                        behaviorTrace,
+                        BehaviorStoreComparers.ChoiceEquality);
+                    if (ancestorReachable)
+                    {
+                        // If an ancestor is reachable, so is all of its descendants
+                        reachableAncestors.AddRange(ancestorBehaviors.Skip(i));
+                        break;
+                    }
+                    else
+                    {
+                        // Even if an ancestor is not reachable, its descendants 
+                        // may still be
+                        continue;
+                    }
+                }
+
+                // This is a greatly overapproximate definition of reachability.
+                // Let b be a behavior of machine i with trace t_b, and let t_i
+                // be the current trace of machine i in machineStates. Suppose 
+                // t_i is a prefix of t_b = t_i::t_b', which means that it would be
+                // considered reachable by the above logic. However, the choices in t_b' may
+                // have external dependencies; a DeliverEventChoice/CompleteReceiveChoice
+                // requires a send executed on a different node. There is no guarantee
+                // that the choices in t_b' will actually be enabled. 
+                //
+                // To establish a precise definition of reachability, behaviors need 
+                // to record these dependencies. Suppose behavior b is the result of a
+                // DeliverEventChoice d which delivered event e from machine j to machine
+                // i. b needs to record its dependent behavior, which would be the behavior
+                // b' that resulted in j sending e to i. Then, b would be reachable if
+                // t_i is a prefix of t_b and b' is reachable. 
+            }
         }
 
         private void UpdateStatesAndGuidance(
@@ -748,6 +819,15 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                     throw new NotSupportedException(
                         $"Unsupported scheduling choice type {choice.GetType().Name}");
             }
+        }
+
+        internal static bool PrefixOf<T>(
+            IReadOnlyList<T> prefix,
+            IReadOnlyList<T> seq,
+            IEqualityComparer<T> comp)
+        {
+            return seq.Count >= prefix.Count &&
+                seq.Take(prefix.Count).SequenceEqual(prefix, comp);
         }
 
         private sealed class MachineStateMap : IReadOnlyDictionary<MachineCreationPath, MachineState>
