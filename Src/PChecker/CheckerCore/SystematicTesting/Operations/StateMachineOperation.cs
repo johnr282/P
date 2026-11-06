@@ -38,6 +38,11 @@ namespace PChecker.SystematicTesting.Operations
         internal bool SkipNextReceiveSchedulingPoint;
 
         /// <summary>
+        /// Target of the send at this operation's current scheduling point, if any.
+        /// </summary>
+        internal StateMachineId PendingSendTarget;
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="StateMachineOperation"/> class.
         /// </summary>
         internal StateMachineOperation(StateMachine stateMachine)

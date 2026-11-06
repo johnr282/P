@@ -41,20 +41,20 @@ namespace PChecker.SystematicTesting.Operations
         {
             InitializeChoice c => 
                 new InitializeChoice(c.OperationId, c.StateMachineId, 
-                    c.InitialEvent?.Snapshot()),
+                    c.InitialEvent?.Snapshot(), c.PendingSendTarget),
             ResumeInitializationChoice c =>
                 new ResumeInitializationChoice(c.OperationId, c.StateMachineId, 
-                    c.InitialEvent?.Snapshot()),
+                    c.InitialEvent?.Snapshot(), c.PendingSendTarget),
             DeliverEventChoice c => 
                 new DeliverEventChoice(c.OperationId, c.StateMachineId, 
-                    SnapshotEventWithMetadata(c.EventToDeliver)),
+                    SnapshotEventWithMetadata(c.EventToDeliver), c.PendingSendTarget),
             ResumeHandlerChoice c => 
                 new ResumeHandlerChoice(c.OperationId, c.StateMachineId, 
-                    SnapshotEventWithMetadata(c.EventToResume)),
+                    SnapshotEventWithMetadata(c.EventToResume), c.PendingSendTarget),
             CompleteReceiveChoice c => 
                 new CompleteReceiveChoice(c.OperationId, c.StateMachineId,
                     SnapshotEventWithMetadata(c.EventToResume), 
-                    SnapshotEventWithMetadata(c.EventToDeliver)),
+                    SnapshotEventWithMetadata(c.EventToDeliver), c.PendingSendTarget),
             RunTaskChoice c => new RunTaskChoice(c.OperationId),
 
             _ => throw new NotSupportedException(
@@ -94,12 +94,19 @@ namespace PChecker.SystematicTesting.Operations
         /// </summary>
         public StateMachineId StateMachineId { get; }
 
+        /// <summary>
+        /// Target of the send that this operation is paused before, or null.
+        /// </summary>
+        public StateMachineId PendingSendTarget { get; }
+
         internal StateMachineSchedulingChoice(
             ulong operationId,
-            StateMachineId machineId)
+            StateMachineId machineId,
+            StateMachineId pendingSendTarget)
             : base(operationId)
         {
             StateMachineId = machineId;
+            PendingSendTarget = pendingSendTarget;
         }
 
         /// <summary>
@@ -145,8 +152,9 @@ namespace PChecker.SystematicTesting.Operations
         internal InitializeChoice(
             ulong operationId, 
             StateMachineId machineToInitializeId,
-            Event initialEvent)
-            : base(operationId, machineToInitializeId)
+            Event initialEvent,
+            StateMachineId pendingSendTarget = null)
+            : base(operationId, machineToInitializeId, pendingSendTarget)
         {
             InitialEvent = initialEvent;
         }
@@ -169,8 +177,9 @@ namespace PChecker.SystematicTesting.Operations
         internal ResumeInitializationChoice(
             ulong operationId, 
             StateMachineId machineToResumeId,
-            Event initialEvent)
-            : base(operationId, machineToResumeId)
+            Event initialEvent,
+            StateMachineId pendingSendTarget = null)
+            : base(operationId, machineToResumeId, pendingSendTarget)
         {
             InitialEvent = initialEvent;
         }
@@ -193,8 +202,9 @@ namespace PChecker.SystematicTesting.Operations
         internal DeliverEventChoice(
             ulong operationId, 
             StateMachineId targetMachineId,
-            (Event e, EventInfo info) eventToDeliver)
-            : base(operationId, targetMachineId)
+            (Event e, EventInfo info) eventToDeliver,
+            StateMachineId pendingSendTarget = null)
+            : base(operationId, targetMachineId, pendingSendTarget)
         {
             EventToDeliver = eventToDeliver;
         }
@@ -216,8 +226,9 @@ namespace PChecker.SystematicTesting.Operations
         internal ResumeHandlerChoice(
             ulong operationId, 
             StateMachineId machineToResumeId,
-            (Event e, EventInfo info) eventToResume)
-            : base(operationId, machineToResumeId)
+            (Event e, EventInfo info) eventToResume,
+            StateMachineId pendingSendTarget = null)
+            : base(operationId, machineToResumeId, pendingSendTarget)
         {
             EventToResume = eventToResume;
         }
@@ -245,8 +256,9 @@ namespace PChecker.SystematicTesting.Operations
             ulong operationId, 
             StateMachineId machineToReceiveId,
             (Event e, EventInfo info) eventToResume, 
-            (Event e, EventInfo info) eventToDeliver)
-            : base(operationId, machineToReceiveId)
+            (Event e, EventInfo info) eventToDeliver,
+            StateMachineId pendingSendTarget = null)
+            : base(operationId, machineToReceiveId, pendingSendTarget)
         {
             EventToResume = eventToResume;
             EventToDeliver = eventToDeliver;

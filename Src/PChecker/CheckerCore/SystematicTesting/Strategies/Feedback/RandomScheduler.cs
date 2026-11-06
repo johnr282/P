@@ -14,22 +14,12 @@ internal class RandomScheduler : IScheduler
         _randomValueGenerator = randomValueGenerator;
     }
 
-    public bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next)
+    public bool GetNextSchedulingChoice(
+        SchedulingChoice lastChoice, IEnumerable<SchedulingChoice> choices, out SchedulingChoice next)
     {
-        var enabledOperations = ops.Where(op => op.Status is AsyncOperationStatus.Enabled).ToList();
-        next = null;
-        if (enabledOperations.Count == 0)
-        {
-            return false;
-        }
-
-        if (enabledOperations.Count == 1)
-        {
-            next = enabledOperations[0];
-            return true;
-        }
-        var idx = _randomValueGenerator.Next(enabledOperations.Count);
-        next = enabledOperations[idx];
+        var choicesList = choices.ToList();
+        var choiceIndex = _randomValueGenerator.Next(choicesList.Count);
+        next = choicesList[choiceIndex];
         return true;
     }
 

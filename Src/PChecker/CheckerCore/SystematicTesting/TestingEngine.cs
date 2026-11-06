@@ -264,6 +264,31 @@ namespace PChecker.SystematicTesting
                         checkerConfiguration.MaxFairSchedulingSteps, 
                         RandomValueGenerator);
                     break;
+                case StrategyType.POS:
+                    Strategy = new ScheduleAndInputStrategy(
+                        checkerConfiguration.MaxUnfairSchedulingSteps,
+                        RandomValueGenerator,
+                        new POSScheduler(RandomValueGenerator));
+                    break;
+                case StrategyType.Feedback:
+                    Strategy = new FeedbackGuidedStrategy(
+                        checkerConfiguration,
+                        new ControlledRandom(checkerConfiguration),
+                        new RandomScheduler(new ControlledRandom(checkerConfiguration)));
+                    break;
+                case StrategyType.FeedbackPCT:
+                    Strategy = new FeedbackGuidedStrategy(
+                        checkerConfiguration,
+                        new ControlledRandom(checkerConfiguration),
+                        new PCTScheduler(checkerConfiguration.StrategyBound, 0,
+                            new ControlledRandom(checkerConfiguration)));
+                    break;
+                case StrategyType.FeedbackPOS:
+                    Strategy = new FeedbackGuidedStrategy(
+                        checkerConfiguration,
+                        new ControlledRandom(checkerConfiguration),
+                        new POSScheduler(new ControlledRandom(checkerConfiguration)));
+                    break;
                 case StrategyType.MonitorGuided:
                     Strategy = new MonitorGuidedStrategy(
                         checkerConfiguration.MaxUnfairSchedulingSteps,
@@ -295,12 +320,6 @@ namespace PChecker.SystematicTesting
             //    Strategy = new PCTStrategy(checkerConfiguration.MaxUnfairSchedulingSteps, checkerConfiguration.StrategyBound,
             //        RandomValueGenerator);
             //}
-            //else if (checkerConfiguration.SchedulingStrategy is "pos")
-            //{
-            //    var scheduler = new POSScheduler(RandomValueGenerator);
-            //    Strategy = new ScheduleAndInputStrategy(checkerConfiguration.MaxUnfairSchedulingSteps,
-            //        RandomValueGenerator, scheduler);
-            //}
             //else if (checkerConfiguration.SchedulingStrategy is "fairpct")
             //{
             //    var prefixLength = checkerConfiguration.MaxUnfairSchedulingSteps;
@@ -320,21 +339,6 @@ namespace PChecker.SystematicTesting
             //else if (checkerConfiguration.SchedulingStrategy is "dfs")
             //{
             //    Strategy = new DFSStrategy(checkerConfiguration.MaxUnfairSchedulingSteps);
-            //}
-            //else if (checkerConfiguration.SchedulingStrategy is "feedback")
-            //{
-            //    Strategy = new FeedbackGuidedStrategy(checkerConfiguration, new ControlledRandom(checkerConfiguration),
-            //        new RandomScheduler(new ControlledRandom(checkerConfiguration)));
-            //}
-            //else if (checkerConfiguration.SchedulingStrategy is "feedbackpct")
-            //{
-            //    Strategy = new FeedbackGuidedStrategy(checkerConfiguration, new ControlledRandom(checkerConfiguration),
-            //        new PCTScheduler(checkerConfiguration.StrategyBound, 0, new ControlledRandom(checkerConfiguration)));
-            //}
-            //else if (checkerConfiguration.SchedulingStrategy is "feedbackpos")
-            //{
-            //    Strategy = new FeedbackGuidedStrategy(checkerConfiguration, new ControlledRandom(checkerConfiguration),
-            //        new POSScheduler(new ControlledRandom(checkerConfiguration)));
             //}
             //else if (checkerConfiguration.SchedulingStrategy is "portfolio")
             //{

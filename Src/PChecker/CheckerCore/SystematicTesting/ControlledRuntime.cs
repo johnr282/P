@@ -538,9 +538,7 @@ namespace PChecker.SystematicTesting
                 "Cannot send event '{0}' to state machine id '{1}' that is not bound to an state machine instance.",
                 e.GetType().FullName, targetId.Value);
 
-            Scheduler.ScheduledOperation.MessageReceiver = targetId.ToString();
-
-            Scheduler.ScheduleNextEnabledOperation(AsyncOperationType.Send);
+            Scheduler.ScheduleNextEnabledOperation(AsyncOperationType.Send, targetId);
             ResetProgramCounter(sender);
 
             var enqueueStatus = EnqueueEvent(target, e, sender);

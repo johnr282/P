@@ -5,7 +5,8 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic;
 
 internal interface IScheduler
 {
-    public bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next);
+    public bool GetNextSchedulingChoice(
+        SchedulingChoice lastChoice, IEnumerable<SchedulingChoice> choices, out SchedulingChoice next);
     public void Reset();
     public bool PrepareForNextIteration();
     public IScheduler Mutate();

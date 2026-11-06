@@ -128,7 +128,7 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// Schedules the next enabled operation.
         /// </summary>
-        internal void ScheduleNextEnabledOperation(AsyncOperationType type)
+        internal void ScheduleNextEnabledOperation(AsyncOperationType type, StateMachineId pendingSendTarget = null)
         {
             var taskId = Task.CurrentId;
 
@@ -165,6 +165,10 @@ namespace PChecker.SystematicTesting
 
             // Update the operation type.
             current.Type = type;
+            if (current is StateMachineOperation machineOp)
+            {
+                machineOp.PendingSendTarget = pendingSendTarget;
+            }
 
             if (CheckerConfiguration.IsProgramStateHashingEnabled)
             {
@@ -309,7 +313,8 @@ namespace PChecker.SystematicTesting
 
             if (machine.IsInitializationPending)
             {
-                choices.Add(new InitializeChoice(machineOp.Id, machineOp.StateMachine.Id, machine.InitialEvent));
+                choices.Add(new InitializeChoice(
+                    machineOp.Id, machine.Id, machine.InitialEvent, machineOp.PendingSendTarget));
             }
             else if (machine.IsInitializing || machine.IsEventHandlerInProgress)
             {
@@ -321,7 +326,7 @@ namespace PChecker.SystematicTesting
                     foreach (var e in receiveEvents)
                     {
                         choices.Add(new CompleteReceiveChoice(
-                            machineOp.Id, machine.Id, eventToResume, e));
+                            machineOp.Id, machine.Id, eventToResume, e, machineOp.PendingSendTarget));
                     }
                 }
                 else
@@ -329,12 +334,12 @@ namespace PChecker.SystematicTesting
                     if (machine.IsInitializing)
                     {
                         choices.Add(new ResumeInitializationChoice(
-                            machineOp.Id, machine.Id, machine.InitialEvent));
+                            machineOp.Id, machine.Id, machine.InitialEvent, machineOp.PendingSendTarget));
                     }
                     else
                     {
                         choices.Add(new ResumeHandlerChoice(
-                            machineOp.Id, machine.Id, machine.InProgressEvent));
+                            machineOp.Id, machine.Id, machine.InProgressEvent, machineOp.PendingSendTarget));
                     }
                 }
             }
@@ -343,7 +348,8 @@ namespace PChecker.SystematicTesting
                 var enabledEvents = machine.GetEnabledEvents();
                 foreach (var e in enabledEvents)
                 {
-                    choices.Add(new DeliverEventChoice(machineOp.Id, machineOp.StateMachine.Id, e));
+                    choices.Add(new DeliverEventChoice(
+                        machineOp.Id, machine.Id, e, machineOp.PendingSendTarget));
                 }
             }
 

@@ -9,128 +9,54 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic;
 
 internal class POSScheduler: IScheduler
 {
-    private IRandomValueGenerator _randomValueGenerator;
+    private readonly IRandomValueGenerator _randomValueGenerator;
 
     /// <summary>
     /// List of prioritized operations.
     /// </summary>
-    private readonly List<AsyncOperation> PrioritizedOperations;
+    private readonly List<ulong> PrioritizedOperations = new();
     
     /// <summary>
-    /// Initializes a new instance of the <see cref="PCTStrategy"/> class.
+    /// Initializes a new instance of the <see cref="POSScheduler"/> class.
     /// </summary>
     public POSScheduler(IRandomValueGenerator random)
     {
         _randomValueGenerator = random;
-        PrioritizedOperations = new List<AsyncOperation>();
     }
 
-    public bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next)
+    public bool GetNextSchedulingChoice(
+        SchedulingChoice lastChoice, IEnumerable<SchedulingChoice> choices, out SchedulingChoice next)
     {
-        next = null;
-        var enabledOperations = ops.Where(op => op.Status is AsyncOperationStatus.Enabled).ToList();
-        if (enabledOperations.Count == 0)
-        {
-            return false;
-        }
+        var operations = choices.ToLookup(choice => choice.OperationId);
+        var pendingSendTargets = operations.ToDictionary(
+            operation => operation.Key,
+            operation => (operation.First() as StateMachineSchedulingChoice)?.PendingSendTarget);
 
-        var highestEnabledOp = GetPrioritizedOperation(enabledOperations, current);
-        next = highestEnabledOp;
-        if (next.Type == AsyncOperationType.Send)
-        {
-            ResetPriorities(next, enabledOperations);
-        }
-        return true;
-    }
-
-    void ResetPriorities(AsyncOperation next, IEnumerable<AsyncOperation> ops)
-    {
-        foreach (var op in ops)
-        {
-            if (op.Type == AsyncOperationType.Send)
-            {
-                if (op.MessageReceiver == next.MessageReceiver)
-                {
-                    PrioritizedOperations.Remove(op);
-                }
-            }
-        }
-        PrioritizedOperations.Remove(next);
-    }
-
-    private AsyncOperation GetHighestPriorityEnabledOperation(IEnumerable<AsyncOperation> choices)
-    {
-        AsyncOperation prioritizedOp = null;
-        foreach (var entity in PrioritizedOperations)
-        {
-            if (choices.Any(m => m == entity))
-            {
-                prioritizedOp = entity;
-                break;
-            }
-        }
-
-        return prioritizedOp;
-    }
-
-    /// <summary>
-    /// Returns the prioritized operation.
-    /// </summary>
-    private AsyncOperation GetPrioritizedOperation(List<AsyncOperation> ops, AsyncOperation current)
-    {
         if (PrioritizedOperations.Count == 0)
         {
-            PrioritizedOperations.Add(current);
+            PrioritizedOperations.Add(lastChoice.OperationId);
         }
 
-        foreach (var op in ops.Where(op => !PrioritizedOperations.Contains(op)))
+        foreach (var operation in operations.Where(operation => !PrioritizedOperations.Contains(operation.Key)))
         {
             var mIndex = _randomValueGenerator.Next(PrioritizedOperations.Count) + 1;
-            PrioritizedOperations.Insert(mIndex, op);
-            Debug.WriteLine("<PCTLog> Detected new operation '{0}' at index '{1}'.", op.Id, mIndex);
+            PrioritizedOperations.Insert(mIndex, operation.Key);
+            Debug.WriteLine("<POSLog> Detected new operation '{0}' at index '{1}'.", operation.Key, mIndex);
         }
 
-        if (FindNonRacingOperation(ops, out var next))
+        var enabledPriorities = PrioritizedOperations.Where(pendingSendTargets.ContainsKey).ToList();
+        var operationId = enabledPriorities.FirstOrDefault(
+            id => pendingSendTargets[id] is null, enabledPriorities[0]);
+        var target = pendingSendTargets[operationId];
+        if (target != null)
         {
-            return next;
+            PrioritizedOperations.RemoveAll(id =>
+                pendingSendTargets.TryGetValue(id, out var otherTarget) && target.Equals(otherTarget));
         }
 
-        var prioritizedSchedulable = GetHighestPriorityEnabledOperation(ops);
-
-        if (Debug.IsEnabled)
-        {
-            Debug.WriteLine("<PCTLog> Prioritized schedulable '{0}'.", prioritizedSchedulable);
-            Debug.Write("<PCTLog> Priority list: ");
-            for (var idx = 0; idx < PrioritizedOperations.Count; idx++)
-            {
-                if (idx < PrioritizedOperations.Count - 1)
-                {
-                    Debug.Write("'{0}', ", PrioritizedOperations[idx]);
-                }
-                else
-                {
-                    Debug.WriteLine("'{0}'.", PrioritizedOperations[idx]);
-                }
-            }
-        }
-
-        return ops.First(op => op.Equals(prioritizedSchedulable));
-    }
-
-    private bool FindNonRacingOperation(IEnumerable<AsyncOperation> ops, out AsyncOperation next)
-    {
-        var nonRacingOps = ops.Where(op => op.Type != AsyncOperationType.Send);
-        if (!nonRacingOps.Any())
-        {
-            next = null;
-            return false;
-        }
-        if (!nonRacingOps.Skip(1).Any())
-        {
-            next = nonRacingOps.First();
-            return true;
-        }
-        next = GetHighestPriorityEnabledOperation(nonRacingOps);
+        var operationChoices = operations[operationId].ToList();
+        var choiceIndex = operationChoices.Count == 1 ? 0 : _randomValueGenerator.Next(operationChoices.Count);
+        next = operationChoices[choiceIndex];
         return true;
     }
 

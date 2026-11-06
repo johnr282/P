@@ -45,7 +45,7 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         /// <summary>
         /// List of prioritized operations.
         /// </summary>
-        private readonly List<AsyncOperation> PrioritizedOperations = new();
+        private readonly List<ulong> PrioritizedOperations = new();
         
         /// <summary>
         /// Set of priority change points.
@@ -53,7 +53,7 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         private readonly SortedSet<int> PriorityChangePoints = new();
         
         /// <summary>
-        /// Initializes a new instance of the <see cref="PCTStrategy"/> class.
+        /// Initializes a new instance of the <see cref="PCTScheduler"/> class.
         /// </summary>
         public PCTScheduler(int maxPrioritySwitchPoints, int scheduleLength, IRandomValueGenerator random)
         {
@@ -68,23 +68,15 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
             
         }
 
-        public virtual bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops,
-            out AsyncOperation next)
+        public virtual bool GetNextSchedulingChoice(
+            SchedulingChoice lastChoice, IEnumerable<SchedulingChoice> choices, out SchedulingChoice next)
         {
             ScheduledSteps++;
-            next = null;
-            var enabledOperations = ops.Where(op => op.Status is AsyncOperationStatus.Enabled).ToList();
-            if (enabledOperations.Count == 0)
-            {
-                if (PriorityChangePoints.Contains(ScheduledSteps))
-                {
-                    MovePriorityChangePointForward();
-                }
-
-                return false;
-            }
-
-            next = GetPrioritizedOperation(enabledOperations, current);
+            var operations = choices.ToLookup(choice => choice.OperationId);
+            var operationId = GetPrioritizedOperation(operations, lastChoice.OperationId);
+            var operationChoices = operations[operationId].ToList();
+            var choiceIndex = operationChoices.Count == 1 ? 0 : _randomValueGenerator.Next(operationChoices.Count);
+            next = operationChoices[choiceIndex];
 
             return true;
         }
@@ -108,55 +100,39 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         }
         
 
-        private AsyncOperation GetHighestPriorityEnabledOperation(IEnumerable<AsyncOperation> choices)
-        {
-            AsyncOperation prioritizedOp = null;
-            foreach (var entity in PrioritizedOperations)
-            {
-                if (choices.Any(m => m == entity))
-                {
-                    prioritizedOp = entity;
-                    break;
-                }
-            }
-
-            return prioritizedOp;
-        }
-
-
         /// <summary>
         /// Returns the prioritized operation.
         /// </summary>
-        private AsyncOperation GetPrioritizedOperation(List<AsyncOperation> ops, AsyncOperation current)
+        private ulong GetPrioritizedOperation(ILookup<ulong, SchedulingChoice> operations, ulong currentOperationId)
         {
             if (PrioritizedOperations.Count == 0)
             {
-                PrioritizedOperations.Add(current);
+                PrioritizedOperations.Add(currentOperationId);
             }
 
-            foreach (var op in ops.Where(op => !PrioritizedOperations.Contains(op)))
+            foreach (var operation in operations.Where(operation => !PrioritizedOperations.Contains(operation.Key)))
             {
                 var mIndex = _randomValueGenerator.Next(PrioritizedOperations.Count) + 1;
-                PrioritizedOperations.Insert(mIndex, op);
-                Debug.WriteLine("<PCTLog> Detected new operation '{0}' at index '{1}'.", op.Id, mIndex);
+                PrioritizedOperations.Insert(mIndex, operation.Key);
+                Debug.WriteLine("<PCTLog> Detected new operation '{0}' at index '{1}'.", operation.Key, mIndex);
             }
 
 
             if (PriorityChangePoints.Contains(ScheduledSteps))
             {
-                if (ops.Count == 1)
+                if (operations.Count == 1)
                 {
                     MovePriorityChangePointForward();
                 }
                 else
                 {
-                    var priority = GetHighestPriorityEnabledOperation(ops);
+                    var priority = PrioritizedOperations.First(operations.Contains);
                     PrioritizedOperations.Remove(priority);
                     PrioritizedOperations.Add(priority);
                     Debug.WriteLine("<PCTLog> Operation '{0}' changes to lowest priority.", priority);
                 }
             }
-            var prioritizedSchedulable = GetHighestPriorityEnabledOperation(ops);
+            var prioritizedSchedulable = PrioritizedOperations.First(operations.Contains);
 
             if (Debug.IsEnabled)
             {
@@ -175,7 +151,7 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
                 }
             }
 
-            return ops.First(op => op.Equals(prioritizedSchedulable));
+            return prioritizedSchedulable;
         }
 
         public void Reset()

@@ -42,14 +42,15 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         }
 
         /// <inheritdoc/>
-        public bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next)
+        public bool GetNextSchedulingChoice(
+            SchedulingChoice lastChoice, IEnumerable<SchedulingChoice> choices, out SchedulingChoice next)
         {
             _scheduledSteps++;
-            return Scheduler.GetNextOperation(current, ops, out next);
+            return Scheduler.GetNextSchedulingChoice(lastChoice, choices, out next);
         }
 
         /// <inheritdoc/>
-        public bool GetNextBooleanChoice(AsyncOperation current, int maxValue, out bool next)
+        public bool GetNextBooleanChoice(SchedulingChoice lastChoice, int maxValue, out bool next)
         {
             next = false;
             if (RandomValueGenerator.Next(maxValue) == 0)
@@ -63,7 +64,7 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         }
 
         /// <inheritdoc/>
-        public bool GetNextIntegerChoice(AsyncOperation current, int maxValue, out int next)
+        public bool GetNextIntegerChoice(SchedulingChoice lastChoice, int maxValue, out int next)
         {
             next = RandomValueGenerator.Next(maxValue);
             _scheduledSteps++;
@@ -105,6 +106,12 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         {
             _scheduledSteps = 0;
             Scheduler.Reset();
+        }
+
+        /// <inheritdoc/>
+        public void NotifyEffects(
+            SchedulingChoice lastChoice, IReadOnlyList<ExecutionEffect> effects, bool completeBehavior)
+        {
         }
     }
 }

@@ -2,10 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using PChecker.Configuration;
 using PChecker.Feedback;
 using PChecker.Generator.Object;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
-using AsyncOperation = PChecker.SystematicTesting.Operations.AsyncOperation;
+using PChecker.SystematicTesting.Operations;
 
 namespace PChecker.SystematicTesting.Strategies.Feedback;
 
@@ -44,15 +45,16 @@ internal class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     }
 
     /// <inheritdoc/>
-    public virtual bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next)
+    public virtual bool GetNextSchedulingChoice(
+        SchedulingChoice lastChoice, IEnumerable<SchedulingChoice> choices, out SchedulingChoice next)
     {
-        var result = Generator.Scheduler.GetNextOperation(current, ops, out next);
+        var result = Generator.Scheduler.GetNextSchedulingChoice(lastChoice, choices, out next);
         ScheduledSteps++;
         return result;
     }
 
     /// <inheritdoc/>
-    public bool GetNextBooleanChoice(AsyncOperation current, int maxValue, out bool next)
+    public bool GetNextBooleanChoice(SchedulingChoice lastChoice, int maxValue, out bool next)
     {
         next = Generator.InputGenerator.Next(maxValue) == 0;
         ScheduledSteps++;
@@ -60,7 +62,7 @@ internal class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     }
 
     /// <inheritdoc/>
-    public bool GetNextIntegerChoice(AsyncOperation current, int maxValue, out int next)
+    public bool GetNextIntegerChoice(SchedulingChoice lastChoice, int maxValue, out int next)
     {
         next = Generator.InputGenerator.Next(maxValue);
         ScheduledSteps++;
@@ -108,6 +110,12 @@ internal class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     public void Reset()
     {
         ScheduledSteps = 0;
+    }
+
+    /// <inheritdoc/>
+    public void NotifyEffects(
+        SchedulingChoice lastChoice, IReadOnlyList<ExecutionEffect> effects, bool completeBehavior)
+    {
     }
 
     private int ComputeDiversity(int timeline, List<int> hash)
