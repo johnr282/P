@@ -26,7 +26,7 @@ using PChecker.Runtime.StateMachines.Managers;
 using PChecker.SystematicTesting.Operations;
 using PChecker.SystematicTesting.Strategies;
 using PChecker.SystematicTesting.Strategies.MonitorGuided;
-//using PChecker.SystematicTesting.Strategies.Liveness;
+using PChecker.SystematicTesting.Strategies.Liveness;
 using PChecker.SystematicTesting.Traces;
 using Debug = PChecker.IO.Debugging.Debug;
 using EventInfo = PChecker.Runtime.Events.EventInfo;
@@ -236,10 +236,10 @@ namespace PChecker.SystematicTesting
             CoverageInfo = new CoverageInfo();
 
             var scheduleTrace = new ScheduleTrace();
-            //if (checkerConfiguration.IsLivenessCheckingEnabled)
-            //{
-            //    strategy = new TemperatureCheckingStrategy(checkerConfiguration, Monitors, strategy);
-            //}
+            if (checkerConfiguration.IsLivenessCheckingEnabled && strategy is not MonitorGuidedStrategy)
+            {
+                strategy = new TemperatureCheckingStrategy(checkerConfiguration, Monitors, strategy);
+            }
 
             Scheduler = new OperationScheduler(this, strategy, scheduleTrace, CheckerConfiguration);
             TaskController = new TaskController(this, Scheduler);

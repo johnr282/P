@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Collections.Generic;
+using PChecker.Configuration;
 using PChecker.Runtime.Specifications;
 using PChecker.SystematicTesting.Operations;
 
@@ -40,13 +41,21 @@ namespace PChecker.SystematicTesting.Strategies.Liveness
         }
 
         /// <inheritdoc/>
-        public abstract bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next);
+        public abstract bool GetNextSchedulingChoice(
+            SchedulingChoice lastChoice, IEnumerable<SchedulingChoice> choices, out SchedulingChoice next);
 
         /// <inheritdoc/>
-        public abstract bool GetNextBooleanChoice(AsyncOperation current, int maxValue, out bool next);
+        public abstract bool GetNextBooleanChoice(SchedulingChoice lastChoice, int maxValue, out bool next);
 
         /// <inheritdoc/>
-        public abstract bool GetNextIntegerChoice(AsyncOperation current, int maxValue, out int next);
+        public abstract bool GetNextIntegerChoice(SchedulingChoice lastChoice, int maxValue, out int next);
+
+        /// <inheritdoc/>
+        public void NotifyEffects(
+            SchedulingChoice lastChoice, IReadOnlyList<ExecutionEffect> effects, bool completeBehavior)
+        {
+            SchedulingStrategy.NotifyEffects(lastChoice, effects, completeBehavior);
+        }
 
         /// <inheritdoc/>
         public virtual bool PrepareForNextIteration()

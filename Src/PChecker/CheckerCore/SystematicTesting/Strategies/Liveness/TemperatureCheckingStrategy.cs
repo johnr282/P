@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Collections.Generic;
+using PChecker.Configuration;
 using PChecker.Runtime.Specifications;
 using PChecker.SystematicTesting.Operations;
 
@@ -24,24 +25,25 @@ namespace PChecker.SystematicTesting.Strategies.Liveness
         }
 
         /// <inheritdoc/>
-        public override bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next)
+        public override bool GetNextSchedulingChoice(
+            SchedulingChoice lastChoice, IEnumerable<SchedulingChoice> choices, out SchedulingChoice next)
         {
             CheckLivenessTemperature();
-            return SchedulingStrategy.GetNextOperation(current, ops, out next);
+            return SchedulingStrategy.GetNextSchedulingChoice(lastChoice, choices, out next);
         }
 
         /// <inheritdoc/>
-        public override bool GetNextBooleanChoice(AsyncOperation current, int maxValue, out bool next)
+        public override bool GetNextBooleanChoice(SchedulingChoice lastChoice, int maxValue, out bool next)
         {
             CheckLivenessTemperature();
-            return SchedulingStrategy.GetNextBooleanChoice(current, maxValue, out next);
+            return SchedulingStrategy.GetNextBooleanChoice(lastChoice, maxValue, out next);
         }
 
         /// <inheritdoc/>
-        public override bool GetNextIntegerChoice(AsyncOperation current, int maxValue, out int next)
+        public override bool GetNextIntegerChoice(SchedulingChoice lastChoice, int maxValue, out int next)
         {
             CheckLivenessTemperature();
-            return SchedulingStrategy.GetNextIntegerChoice(current, maxValue, out next);
+            return SchedulingStrategy.GetNextIntegerChoice(lastChoice, maxValue, out next);
         }
 
         /// <summary>

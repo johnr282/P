@@ -32,7 +32,7 @@ public class FeedbackSchedulerTests
     [Test]
     public void PctDefersPriorityChangeUntilTwoOperationsCanRun()
     {
-        var scheduler = new PCTScheduler(1, 2, RecordedRandom(1, 1, 0));
+        var scheduler = new PCTScheduler(1, 2, RecordedRandom(0, 1, 0));
         var receiver = MachineId("receiver");
         var first = new DeliverEventChoice(0, receiver, default);
         var second = new DeliverEventChoice(0, receiver, default) { ChoiceId = 1 };
@@ -42,6 +42,21 @@ public class FeedbackSchedulerTests
         Assert.That(next, Is.SameAs(second));
 
         scheduler.GetNextSchedulingChoice(next, new SchedulingChoice[] { first, second, otherOperation }, out next);
+        Assert.That(next, Is.SameAs(otherOperation));
+    }
+
+    [Test]
+    public void PctCanChangePriorityAtTheOnlyLearnedStep()
+    {
+        var scheduler = new PCTScheduler(1, 0, RecordedRandom(0));
+        var current = new RunTaskChoice(0);
+        var otherOperation = new RunTaskChoice(1);
+
+        scheduler.GetNextSchedulingChoice(current, new[] { current }, out _);
+        scheduler.PrepareForNextIteration();
+        var nextScheduler = scheduler.New();
+
+        nextScheduler.GetNextSchedulingChoice(current, new[] { current, otherOperation }, out var next);
         Assert.That(next, Is.SameAs(otherOperation));
     }
 

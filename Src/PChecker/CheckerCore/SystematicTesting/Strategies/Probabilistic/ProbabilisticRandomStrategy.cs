@@ -29,29 +29,21 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         }
 
         /// <inheritdoc/>
-        public override bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next)
+        public override bool GetNextSchedulingChoice(
+            SchedulingChoice lastChoice, IEnumerable<SchedulingChoice> choices, out SchedulingChoice next)
         {
-            var enabledOperations = ops.Where(op => op.Status is AsyncOperationStatus.Enabled).ToList();
-            if (enabledOperations.Count == 0)
+            var operations = choices.GroupBy(choice => choice.OperationId).ToList();
+            IGrouping<ulong, SchedulingChoice> operation = null;
+            if (operations.Count > 1 && !ShouldCurrentMachineChange())
             {
-                next = null;
-                return false;
+                operation = operations.Find(group => group.Key == lastChoice.OperationId);
             }
 
+            operation ??= operations[RandomValueGenerator.Next(operations.Count)];
+            var choiceCount = operation.Count();
+            var choiceIndex = choiceCount == 1 ? 0 : RandomValueGenerator.Next(choiceCount);
+            next = operation.ElementAt(choiceIndex);
             ScheduledSteps++;
-
-            if (enabledOperations.Count > 1)
-            {
-                if (!ShouldCurrentMachineChange() && current.Status is AsyncOperationStatus.Enabled)
-                {
-                    next = current;
-                    return true;
-                }
-            }
-
-            var idx = RandomValueGenerator.Next(enabledOperations.Count);
-            next = enabledOperations[idx];
-
             return true;
         }
 

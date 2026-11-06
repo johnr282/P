@@ -174,11 +174,8 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
 
         private void PreparePriorityChangePoints(int step)
         {
-            List<int> listOfInts = new List<int>();
-            for (int i = 0; i < step; i++)
-            {
-                listOfInts.Add(i);
-            }
+            // GetNextSchedulingChoice increments the step before checking change points.
+            var listOfInts = Enumerable.Range(1, step).ToList();
 
             for (int i = 0; i < MaxPrioritySwitchPoints; i++)
             {

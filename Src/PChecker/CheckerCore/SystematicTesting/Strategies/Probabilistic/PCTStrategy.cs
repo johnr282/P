@@ -47,7 +47,7 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         /// <summary>
         /// List of prioritized operations.
         /// </summary>
-        private readonly List<AsyncOperation> PrioritizedOperations;
+        private readonly List<ulong> PrioritizedOperations;
 
         /// <summary>
         /// Set of priority change points.
@@ -64,25 +64,19 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
             ScheduledSteps = 0;
             ScheduleLength = 0;
             MaxPrioritySwitchPoints = maxPrioritySwitchPoints;
-            PrioritizedOperations = new List<AsyncOperation>();
+            PrioritizedOperations = new List<ulong>();
             PriorityChangePoints = new SortedSet<int>();
         }
 
         /// <inheritdoc/>
-        public bool GetNextOperation(AsyncOperation current, IEnumerable<AsyncOperation> ops, out AsyncOperation next)
+        public bool GetNextSchedulingChoice(
+            SchedulingChoice lastChoice, IEnumerable<SchedulingChoice> choices, out SchedulingChoice next)
         {
-            next = null;
-            var enabledOperations = ops.Where(op => op.Status is AsyncOperationStatus.Enabled).ToList();
-            if (enabledOperations.Count == 0)
-            {
-                return false;
-            }
-
-            var highestEnabledOp = GetPrioritizedOperation(enabledOperations, current);
-            if (next is null)
-            {
-                next = highestEnabledOp;
-            }
+            var operations = choices.ToLookup(choice => choice.OperationId);
+            var operationId = GetPrioritizedOperation(operations, lastChoice.OperationId);
+            var operationChoices = operations[operationId].ToList();
+            var choiceIndex = operationChoices.Count == 1 ? 0 : RandomValueGenerator.Next(operationChoices.Count);
+            next = operationChoices[choiceIndex];
 
             ScheduledSteps++;
 
@@ -90,7 +84,7 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         }
 
         /// <inheritdoc/>
-        public bool GetNextBooleanChoice(AsyncOperation current, int maxValue, out bool next)
+        public bool GetNextBooleanChoice(SchedulingChoice lastChoice, int maxValue, out bool next)
         {
             next = false;
             if (RandomValueGenerator.Next(maxValue) == 0)
@@ -104,7 +98,7 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         }
 
         /// <inheritdoc/>
-        public bool GetNextIntegerChoice(AsyncOperation current, int maxValue, out int next)
+        public bool GetNextIntegerChoice(SchedulingChoice lastChoice, int maxValue, out int next)
         {
             next = RandomValueGenerator.Next(maxValue);
             ScheduledSteps++;
@@ -163,36 +157,36 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
         /// <summary>
         /// Returns the prioritized operation.
         /// </summary>
-        private AsyncOperation GetPrioritizedOperation(List<AsyncOperation> ops, AsyncOperation current)
+        private ulong GetPrioritizedOperation(ILookup<ulong, SchedulingChoice> operations, ulong currentOperationId)
         {
             if (PrioritizedOperations.Count == 0)
             {
-                PrioritizedOperations.Add(current);
+                PrioritizedOperations.Add(currentOperationId);
             }
 
-            foreach (var op in ops.Where(op => !PrioritizedOperations.Contains(op)))
+            foreach (var operation in operations.Where(operation => !PrioritizedOperations.Contains(operation.Key)))
             {
                 var mIndex = RandomValueGenerator.Next(PrioritizedOperations.Count) + 1;
-                PrioritizedOperations.Insert(mIndex, op);
-                Debug.WriteLine("<PCTLog> Detected new operation '{0}' at index '{1}'.", op.Id, mIndex);
+                PrioritizedOperations.Insert(mIndex, operation.Key);
+                Debug.WriteLine("<PCTLog> Detected new operation '{0}' at index '{1}'.", operation.Key, mIndex);
             }
 
             if (PriorityChangePoints.Contains(ScheduledSteps))
             {
-                if (ops.Count == 1)
+                if (operations.Count == 1)
                 {
                     MovePriorityChangePointForward();
                 }
                 else
                 {
-                    var priority = GetHighestPriorityEnabledOperation(ops);
+                    var priority = PrioritizedOperations.First(operations.Contains);
                     PrioritizedOperations.Remove(priority);
                     PrioritizedOperations.Add(priority);
                     Debug.WriteLine("<PCTLog> Operation '{0}' changes to lowest priority.", priority);
                 }
             }
 
-            var prioritizedSchedulable = GetHighestPriorityEnabledOperation(ops);
+            var prioritizedSchedulable = PrioritizedOperations.First(operations.Contains);
             if (Debug.IsEnabled)
             {
                 Debug.WriteLine("<PCTLog> Prioritized schedulable '{0}'.", prioritizedSchedulable);
@@ -210,25 +204,7 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
                 }
             }
 
-            return ops.First(op => op.Equals(prioritizedSchedulable));
-        }
-
-        /// <summary>
-        /// Returns the highest-priority enabled operation.
-        /// </summary>
-        private AsyncOperation GetHighestPriorityEnabledOperation(IEnumerable<AsyncOperation> choices)
-        {
-            AsyncOperation prioritizedOp = null;
-            foreach (var entity in PrioritizedOperations)
-            {
-                if (choices.Any(m => m == entity))
-                {
-                    prioritizedOp = entity;
-                    break;
-                }
-            }
-
-            return prioritizedOp;
+            return prioritizedSchedulable;
         }
 
         /// <summary>
@@ -273,6 +249,12 @@ namespace PChecker.SystematicTesting.Strategies.Probabilistic
             ScheduledSteps = 0;
             PrioritizedOperations.Clear();
             PriorityChangePoints.Clear();
+        }
+
+        /// <inheritdoc/>
+        public void NotifyEffects(
+            SchedulingChoice lastChoice, IReadOnlyList<ExecutionEffect> effects, bool completeBehavior)
+        {
         }
     }
 }

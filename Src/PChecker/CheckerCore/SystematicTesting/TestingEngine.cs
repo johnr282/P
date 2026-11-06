@@ -264,6 +264,18 @@ namespace PChecker.SystematicTesting
                         checkerConfiguration.MaxFairSchedulingSteps, 
                         RandomValueGenerator);
                     break;
+                case StrategyType.Probabilistic:
+                    Strategy = new ProbabilisticRandomStrategy(
+                        checkerConfiguration.MaxFairSchedulingSteps,
+                        checkerConfiguration.StrategyBound,
+                        RandomValueGenerator);
+                    break;
+                case StrategyType.PCT:
+                    Strategy = new PCTStrategy(
+                        checkerConfiguration.MaxUnfairSchedulingSteps,
+                        checkerConfiguration.StrategyBound,
+                        RandomValueGenerator);
+                    break;
                 case StrategyType.POS:
                     Strategy = new ScheduleAndInputStrategy(
                         checkerConfiguration.MaxUnfairSchedulingSteps,
@@ -315,22 +327,12 @@ namespace PChecker.SystematicTesting
                     break;
             }
 
-            //if (checkerConfiguration.SchedulingStrategy is "pct")
-            //{
-            //    Strategy = new PCTStrategy(checkerConfiguration.MaxUnfairSchedulingSteps, checkerConfiguration.StrategyBound,
-            //        RandomValueGenerator);
-            //}
-            //else if (checkerConfiguration.SchedulingStrategy is "fairpct")
+            //if (checkerConfiguration.SchedulingStrategy is "fairpct")
             //{
             //    var prefixLength = checkerConfiguration.MaxUnfairSchedulingSteps;
             //    var prefixStrategy = new PCTStrategy(prefixLength, checkerConfiguration.StrategyBound, RandomValueGenerator);
             //    var suffixStrategy = new RandomStrategy(checkerConfiguration.MaxFairSchedulingSteps, RandomValueGenerator);
             //    Strategy = new ComboStrategy(prefixStrategy, suffixStrategy);
-            //}
-            //else if (checkerConfiguration.SchedulingStrategy is "probabilistic")
-            //{
-            //    Strategy = new ProbabilisticRandomStrategy(checkerConfiguration.MaxFairSchedulingSteps,
-            //        checkerConfiguration.StrategyBound, RandomValueGenerator);
             //}
             //else if (checkerConfiguration.SchedulingStrategy is "rl")
             //{

@@ -25,11 +25,7 @@
     </ItemGroup>
 	<ItemGroup>
 		<Compile Remove="SystematicTesting\Strategies\Exhaustive\DFSStrategy.cs" />
-		<Compile Remove="SystematicTesting\Strategies\Liveness\LivenessCheckingStrategy.cs" />
-		<Compile Remove="SystematicTesting\Strategies\Liveness\TemperatureCheckingStrategy.cs" />
 		<Compile Remove="SystematicTesting\Strategies\Special\ComboStrategy.cs" />
-		<Compile Remove="SystematicTesting\Strategies\Probabilistic\PCTStrategy.cs" />
-		<Compile Remove="SystematicTesting\Strategies\Probabilistic\ProbabilisticRandomStrategy.cs" />
 		<Compile Remove="SystematicTesting\Strategies\Probabilistic\QLearningStrategy.cs" />
 	</ItemGroup>
 	<ItemGroup>
