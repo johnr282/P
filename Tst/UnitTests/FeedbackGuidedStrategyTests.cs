@@ -17,12 +17,18 @@ public class FeedbackGuidedStrategyTests
     public void FestTracksNovelTimelinesPerCampaign()
     {
         var timeline = new TimelineObserver();
-        var firstPolicy = new FestPolicy();
-        var secondPolicy = new FestPolicy();
+        var configuration = CheckerConfiguration.Create();
+        var firstStrategy = new FestStrategy(configuration, new ControlledRandom(configuration),
+            new RandomScheduler(new ControlledRandom(configuration)));
+        var secondStrategy = new FestStrategy(configuration, new ControlledRandom(configuration),
+            new RandomScheduler(new ControlledRandom(configuration)));
 
-        Assert.That(firstPolicy.Evaluate(timeline), Is.EqualTo(new SeedFeedback(20, 20)));
-        Assert.That(firstPolicy.Evaluate(timeline), Is.Null);
-        Assert.That(secondPolicy.Evaluate(timeline), Is.EqualTo(new SeedFeedback(20, 20)));
+        firstStrategy.ObserveRunningResults(timeline);
+        firstStrategy.ObserveRunningResults(timeline);
+        secondStrategy.ObserveRunningResults(timeline);
+
+        Assert.That(firstStrategy.TotalSavedInputs(), Is.EqualTo(1));
+        Assert.That(secondStrategy.TotalSavedInputs(), Is.EqualTo(1));
     }
 
     [Test]
@@ -51,9 +57,8 @@ public class FeedbackGuidedStrategyTests
     public void MutationReceivesFeedbackFromAnAdmittedDuplicateTimeline()
     {
         var configuration = CheckerConfiguration.Create();
-        var policy = new DuplicateTimelinePolicy();
-        var strategy = new FeedbackGuidedStrategy(configuration, new ControlledRandom(configuration),
-            new RandomScheduler(new ControlledRandom(configuration)), policy, policy);
+        var strategy = new DuplicateTimelineStrategy(configuration, new ControlledRandom(configuration),
+            new RandomScheduler(new ControlledRandom(configuration)));
 
         strategy.ObserveRunningResults(new TimelineObserver());
         Assert.That(strategy.TotalSavedInputs(), Is.Zero);
@@ -62,19 +67,22 @@ public class FeedbackGuidedStrategyTests
         Assert.That(strategy.TotalSavedInputs(), Is.EqualTo(1));
 
         strategy.PrepareForNextIteration();
-        Assert.That(policy.Parent?.Feedback, Is.SameAs(policy.DuplicateFeedback));
+        Assert.That(strategy.Parent?.Feedback, Is.SameAs(strategy.DuplicateFeedback));
     }
 
-    private sealed class DuplicateTimelinePolicy : IFeedbackPolicy, IRecordingMutationPolicy
+    private sealed class DuplicateTimelineStrategy : FeedbackGuidedStrategy
     {
         private readonly TimelineDiversity _diversity = new();
-        private readonly FestPolicy _fest = new();
+        internal DuplicateTimelineStrategy(CheckerConfiguration configuration, ControlledRandom input, IScheduler scheduler)
+            : base(configuration, input, scheduler)
+        {
+        }
 
         internal SeedFeedback DuplicateFeedback { get; } = new(10, 1);
 
         internal GeneratorRecord Parent { get; private set; }
 
-        public SeedFeedback Evaluate(TimelineObserver timeline)
+        protected override SeedFeedback ComputeFeedback(TimelineObserver timeline)
         {
             var (score, minHash) = _diversity.Measure(timeline);
             if (score != 0)
@@ -86,12 +94,10 @@ public class FeedbackGuidedStrategyTests
             return DuplicateFeedback;
         }
 
-        public StrategyGenerator CreateFresh(StrategyGenerator current) => _fest.CreateFresh(current);
-
-        public StrategyGenerator Mutate(GeneratorRecord parent)
+        protected override StrategyGenerator MutateRecording(GeneratorRecord parent)
         {
             Parent = parent;
-            return _fest.Mutate(parent);
+            return new StrategyGenerator(parent.Generator.InputGenerator.Mutate(), parent.Generator.Scheduler.Mutate());
         }
     }
 }

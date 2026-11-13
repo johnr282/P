@@ -11,10 +11,14 @@ using PChecker.SystematicTesting.Operations;
 namespace PChecker.SystematicTesting.Strategies.Feedback;
 
 
-internal sealed class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
+internal record SeedFeedback(int Priority, int MutationBudget);
+
+internal record StrategyGenerator(ControlledRandom InputGenerator, IScheduler Scheduler);
+
+internal record GeneratorRecord(SeedFeedback Feedback, StrategyGenerator Generator);
+
+internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
 {
-    private readonly IFeedbackPolicy _feedbackPolicy;
-    private readonly IRecordingMutationPolicy _mutationPolicy;
     private readonly int _maxScheduledSteps;
     private readonly List<GeneratorRecord> _savedGenerators = new();
     private readonly HashSet<GeneratorRecord> _visitedGenerators = new();
@@ -26,17 +30,13 @@ internal sealed class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     private bool _shouldExploreNew;
     private GeneratorRecord _currentParent;
 
-    internal FeedbackGuidedStrategy(
+    protected FeedbackGuidedStrategy(
         CheckerConfiguration checkerConfiguration,
         ControlledRandom inputGenerator,
-        IScheduler scheduler,
-        IFeedbackPolicy feedbackPolicy,
-        IRecordingMutationPolicy mutationPolicy)
+        IScheduler scheduler)
     {
         _maxScheduledSteps = checkerConfiguration.MaxUnfairSchedulingSteps;
         _generator = new StrategyGenerator(inputGenerator, scheduler);
-        _feedbackPolicy = feedbackPolicy;
-        _mutationPolicy = mutationPolicy;
     }
 
     /// <inheritdoc/>
@@ -65,7 +65,7 @@ internal sealed class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     }
 
     /// <inheritdoc/>
-    public bool PrepareForNextIteration()
+    public virtual bool PrepareForNextIteration()
     {
         _scheduledSteps = 0;
         PrepareNextInput();
@@ -108,14 +108,14 @@ internal sealed class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     }
 
     /// <inheritdoc/>
-    public void NotifyEffects(
+    public virtual void NotifyEffects(
         SchedulingChoice lastChoice, IReadOnlyList<ExecutionEffect> effects, bool completeBehavior)
     {
     }
 
     public void ObserveRunningResults(TimelineObserver timelineObserver)
     {
-        var feedback = _feedbackPolicy.Evaluate(timelineObserver);
+        var feedback = ComputeFeedback(timelineObserver);
         if (feedback is null)
         {
             return;
@@ -145,10 +145,10 @@ internal sealed class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
         _generator.Scheduler.PrepareForNextIteration();
         if (_savedGenerators.Count == 0)
         {
-            _generator = _mutationPolicy.CreateFresh(_generator);
+            _generator = CreateFreshGenerator(_generator);
             return;
         }
-        
+
         if (_currentParent == null && !_shouldExploreNew)
         {
             _currentParent = _savedGenerators.First();
@@ -189,10 +189,20 @@ internal sealed class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
         }
 
         _generator = _shouldExploreNew
-            ? _mutationPolicy.CreateFresh(_generator)
-            : _mutationPolicy.Mutate(_currentParent);
+            ? CreateFreshGenerator(_generator)
+            : MutateRecording(_currentParent);
         _pendingMutations -= 1;
     }
+
+    /// <summary>
+    /// Returns feedback for an admitted recording, or null to discard it.
+    /// </summary>
+    protected abstract SeedFeedback ComputeFeedback(TimelineObserver timeline);
+
+    protected abstract StrategyGenerator MutateRecording(GeneratorRecord parent);
+
+    protected virtual StrategyGenerator CreateFreshGenerator(StrategyGenerator current) =>
+        new(current.InputGenerator.New(), current.Scheduler.New());
 
     public void DumpStats(TextWriter writer)
     {

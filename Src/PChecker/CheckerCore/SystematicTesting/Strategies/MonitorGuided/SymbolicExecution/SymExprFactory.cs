@@ -64,7 +64,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
         {
             return expr switch
             {
-                ConcreteExpr concrete => new ConcreteExpr(concrete.Value.Clone(), concrete.Type),
+                ConcreteExpr concrete => new ConcreteExpr(concrete.Value?.Clone(), concrete.Type),
                 SymbolExpr symbol => new SymbolExpr(symbol.ID, symbol.Type),
                 BinaryExpr binary => new BinaryExpr(
                     binary.Op,

@@ -59,15 +59,21 @@ namespace PChecker.SystematicTesting.Operations
     { 
         internal Event ObservedEvent { get; }
         internal bool Ignored { get; }
+        internal string MonitorName { get; }
+        internal int TracePosition { get; }
 
         internal MonitorObservationEffect(
             StateMachineId stateMachineId, 
             Event announcedEvent,
-            bool ignored)
+            bool ignored,
+            string monitorName = null,
+            int tracePosition = 0)
             : base(stateMachineId)
         {
             ObservedEvent = announcedEvent?.Snapshot();
             Ignored = ignored;
+            MonitorName = monitorName;
+            TracePosition = tracePosition;
         }
     }
 

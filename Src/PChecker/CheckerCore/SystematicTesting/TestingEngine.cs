@@ -348,12 +348,8 @@ namespace PChecker.SystematicTesting
             //}
         }
 
-        private FeedbackGuidedStrategy CreateFestStrategy(IScheduler scheduler)
-        {
-            var policy = new FestPolicy();
-            return new FeedbackGuidedStrategy(_checkerConfiguration,
-                new ControlledRandom(_checkerConfiguration), scheduler, policy, policy);
-        }
+        private FestStrategy CreateFestStrategy(IScheduler scheduler) =>
+            new(_checkerConfiguration, new ControlledRandom(_checkerConfiguration), scheduler);
 
         /// <summary>
         /// Runs the testing engine.

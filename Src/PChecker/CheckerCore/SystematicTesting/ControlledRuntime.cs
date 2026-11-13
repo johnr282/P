@@ -102,6 +102,7 @@ namespace PChecker.SystematicTesting
         /// The asynchronous operation scheduler.
         /// </summary>
         internal readonly OperationScheduler Scheduler;
+        private readonly Dictionary<Type, string> _monitorNames = new();
 
         /// <summary>
         /// Responsible for controlling the execution of tasks.
@@ -671,7 +672,7 @@ namespace PChecker.SystematicTesting
         public void RegisterMonitor<T>(string monitorASTName)
             where T : Monitor
         {
-            var monitor = TryCreateMonitor(typeof(T));
+            var monitor = TryCreateMonitor(typeof(T), monitorASTName);
 
             if (monitor != null &&
                 CheckerConfiguration.SchedulingStrategy == StrategyType.MonitorGuided)
@@ -699,7 +700,7 @@ namespace PChecker.SystematicTesting
         /// <summary>
         /// Tries to create a new <see cref="Runtime.Specifications.Monitor"/> of the specified <see cref="Type"/>.
         /// </summary>
-        internal Monitor TryCreateMonitor(Type type)
+        internal Monitor TryCreateMonitor(Type type, string monitorName = null)
         {
             if (Monitors.Any(m => m.GetType() == type))
             {
@@ -721,6 +722,10 @@ namespace PChecker.SystematicTesting
             }
 
             Monitors.Add(monitor);
+            if (monitorName != null)
+            {
+                _monitorNames.Add(type, monitorName);
+            }
 
             monitor.GotoStartState();
             return monitor;
@@ -735,10 +740,13 @@ namespace PChecker.SystematicTesting
             if (monitor == default)
                 return;
 
+            _monitorNames.TryGetValue(type, out var monitorName);
             EffectsSinceLastSchedulingChoice.Add(new MonitorObservationEffect(
-                senderId, 
+                senderId,
                 e,
-                monitor.IsEventIgnoredInCurrentState(e)));
+                monitor.IsEventIgnoredInCurrentState(e),
+                monitorName,
+                Scheduler?.ScheduleTrace.Count ?? 0));
             monitor.MonitorEvent(e, senderId?.Name, senderId?.Type, senderStateName);
         }
 
@@ -1411,6 +1419,7 @@ namespace PChecker.SystematicTesting
             if (disposing)
             {
                 Monitors.Clear();
+                _monitorNames.Clear();
                 StateMachineMap.Clear();
             }
 
