@@ -11,68 +11,63 @@ using PChecker.SystematicTesting.Operations;
 namespace PChecker.SystematicTesting.Strategies.Feedback;
 
 
-internal class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
+internal sealed class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
 {
-    public record StrategyGenerator(ControlledRandom InputGenerator, IScheduler Scheduler);
-
-    public record GeneratorRecord(int Priority, StrategyGenerator Generator, List<int> MinHash);
-
-    internal StrategyGenerator Generator;
-
+    private readonly IFeedbackPolicy _feedbackPolicy;
+    private readonly IRecordingMutationPolicy _mutationPolicy;
     private readonly int _maxScheduledSteps;
+    private readonly List<GeneratorRecord> _savedGenerators = new();
+    private readonly HashSet<GeneratorRecord> _visitedGenerators = new();
+    private readonly System.Random _rnd = new();
 
-    protected int ScheduledSteps;
-
-    private readonly HashSet<int> _visitedTimelines = new();
-
-    private List<GeneratorRecord> _savedGenerators = new ();
+    private StrategyGenerator _generator;
+    private int _scheduledSteps;
     private int _pendingMutations;
     private bool _shouldExploreNew;
-    private HashSet<GeneratorRecord> _visitedGenerators = new HashSet<GeneratorRecord>();
     private GeneratorRecord _currentParent;
 
-    private System.Random _rnd = new System.Random();
-
-
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="FeedbackGuidedStrategy"/> class.
-    /// </summary>
-    public FeedbackGuidedStrategy(CheckerConfiguration checkerConfiguration, ControlledRandom inputGenerator, IScheduler scheduler)
+    internal FeedbackGuidedStrategy(
+        CheckerConfiguration checkerConfiguration,
+        ControlledRandom inputGenerator,
+        IScheduler scheduler,
+        IFeedbackPolicy feedbackPolicy,
+        IRecordingMutationPolicy mutationPolicy)
     {
         _maxScheduledSteps = checkerConfiguration.MaxUnfairSchedulingSteps;
-        Generator = new StrategyGenerator(inputGenerator, scheduler);
+        _generator = new StrategyGenerator(inputGenerator, scheduler);
+        _feedbackPolicy = feedbackPolicy;
+        _mutationPolicy = mutationPolicy;
     }
 
     /// <inheritdoc/>
-    public virtual bool GetNextSchedulingChoice(
+    public bool GetNextSchedulingChoice(
         SchedulingChoice lastChoice, IEnumerable<SchedulingChoice> choices, out SchedulingChoice next)
     {
-        var result = Generator.Scheduler.GetNextSchedulingChoice(lastChoice, choices, out next);
-        ScheduledSteps++;
+        var result = _generator.Scheduler.GetNextSchedulingChoice(lastChoice, choices, out next);
+        _scheduledSteps++;
         return result;
     }
 
     /// <inheritdoc/>
     public bool GetNextBooleanChoice(SchedulingChoice lastChoice, int maxValue, out bool next)
     {
-        next = Generator.InputGenerator.Next(maxValue) == 0;
-        ScheduledSteps++;
+        next = _generator.InputGenerator.Next(maxValue) == 0;
+        _scheduledSteps++;
         return true;
     }
 
     /// <inheritdoc/>
     public bool GetNextIntegerChoice(SchedulingChoice lastChoice, int maxValue, out int next)
     {
-        next = Generator.InputGenerator.Next(maxValue);
-        ScheduledSteps++;
+        next = _generator.InputGenerator.Next(maxValue);
+        _scheduledSteps++;
         return true;
     }
 
     /// <inheritdoc/>
-    public virtual bool PrepareForNextIteration()
+    public bool PrepareForNextIteration()
     {
-        ScheduledSteps = 0;
+        _scheduledSteps = 0;
         PrepareNextInput();
         return true;
     }
@@ -80,7 +75,7 @@ internal class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     /// <inheritdoc/>
     public int GetScheduledSteps()
     {
-        return ScheduledSteps;
+        return _scheduledSteps;
     }
 
     /// <inheritdoc/>
@@ -91,7 +86,7 @@ internal class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
             return false;
         }
 
-        return ScheduledSteps >= _maxScheduledSteps;
+        return _scheduledSteps >= _maxScheduledSteps;
     }
 
     /// <inheritdoc/>
@@ -109,7 +104,7 @@ internal class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     /// <inheritdoc/>
     public void Reset()
     {
-        ScheduledSteps = 0;
+        _scheduledSteps = 0;
     }
 
     /// <inheritdoc/>
@@ -118,79 +113,26 @@ internal class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     {
     }
 
-    private int ComputeDiversity(int timeline, List<int> hash)
+    public void ObserveRunningResults(TimelineObserver timelineObserver)
     {
-        if (!_visitedTimelines.Add(timeline))
-        {
-            return 0;
-        }
-
-        if (_savedGenerators.Count == 0)
-        {
-            return 20;
-        }
-
-        var maxSim = int.MinValue;
-        foreach (var record in _savedGenerators)
-        {
-            var timelineHash = record.MinHash;
-            var similarity = 0;
-            for (int i = 0; i < hash.Count; i++)
-            {
-                if (hash[i] == timelineHash[i])
-                {
-                    similarity += 1;
-                }
-            }
-
-            maxSim = Math.Max(maxSim, similarity);
-        }
-
-
-        return (hash.Count - maxSim) + 20;
-    }
-
-    /// <summary>
-    /// This method observes the results of previous run and prepare for the next run.
-    /// </summary>
-    public virtual void ObserveRunningResults(TimelineObserver timelineObserver)
-    {
-        var timelineHash = timelineObserver.GetTimelineHash();
-        var timelineMinhash = timelineObserver.GetTimelineMinhash();
-
-        int diversityScore = ComputeDiversity(timelineHash, timelineMinhash);
-
-        if (diversityScore == 0)
+        var feedback = _feedbackPolicy.Evaluate(timelineObserver);
+        if (feedback is null)
         {
             return;
         }
 
-        int priority = diversityScore;
-        
-        if (priority > 0)
+        if (feedback.MutationBudget <= 0)
         {
-            var record = new GeneratorRecord(priority, Generator, timelineMinhash);
-            if (_savedGenerators.Count == 0)
-            {
-                _savedGenerators.Add(record);
-                return;
-            }
-
-            // Maybe use binary search to speed up in the future.
-            var index = 0;
-            while (index < _savedGenerators.Count && priority < _savedGenerators[index].Priority)
-            {
-                index += 1;
-            }
-            if (index >= _savedGenerators.Count)
-            {
-                _savedGenerators.Add(record);
-            }
-            else
-            {
-                _savedGenerators.Insert(index, record);
-            }
+            throw new InvalidOperationException("An admitted recording must have a positive mutation budget.");
         }
+
+        var index = 0;
+        while (index < _savedGenerators.Count && feedback.Priority < _savedGenerators[index].Feedback.Priority)
+        {
+            index++;
+        }
+
+        _savedGenerators.Insert(index, new GeneratorRecord(feedback, _generator));
     }
 
     public int TotalSavedInputs()
@@ -200,67 +142,56 @@ internal class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
 
     private void PrepareNextInput()
     {
-        Generator.Scheduler.PrepareForNextIteration();
+        _generator.Scheduler.PrepareForNextIteration();
         if (_savedGenerators.Count == 0)
         {
-            // Mutate current input if no input is saved.
-            Generator = NewGenerator();
+            _generator = _mutationPolicy.CreateFresh(_generator);
+            return;
         }
-        else
+        
+        if (_currentParent == null && !_shouldExploreNew)
         {
-            if (_currentParent == null && !_shouldExploreNew)
-            {
-                _currentParent = _savedGenerators.First();
-                _visitedGenerators.Add(_currentParent);
-                _pendingMutations = 50;
-            }
-
-            if (_pendingMutations == 0)
-            {
-                _shouldExploreNew = false;
-                bool found = false;
-                foreach (var generator in _savedGenerators)
-                {
-                    if (_visitedGenerators.Contains(generator)) continue;
-                    _currentParent = generator;
-                    _visitedGenerators.Add(generator);
-                    _pendingMutations = generator.Priority;
-                    found = true;
-                    break;
-                }
-
-                if (!found)
-                {
-                    if (_rnd.NextDouble() < 0.5)
-                    {
-                        _visitedGenerators.Clear();
-                        _currentParent = _savedGenerators.First();
-                        _visitedGenerators.Add(_currentParent);
-                        _pendingMutations = _currentParent.Priority;
-                    }
-                    else
-                    {
-                        _shouldExploreNew = true;
-                        _currentParent = null;
-                        _pendingMutations = 50;
-                    }
-                }
-            }
-
-            Generator = _shouldExploreNew ? NewGenerator() : MutateGenerator(_currentParent.Generator);
-            _pendingMutations -= 1;
+            _currentParent = _savedGenerators.First();
+            _visitedGenerators.Add(_currentParent);
+            _pendingMutations = 50;
         }
-    }
 
+        if (_pendingMutations == 0)
+        {
+            _shouldExploreNew = false;
+            bool found = false;
+            foreach (var generator in _savedGenerators)
+            {
+                if (_visitedGenerators.Contains(generator)) continue;
+                _currentParent = generator;
+                _visitedGenerators.Add(generator);
+                _pendingMutations = generator.Feedback.MutationBudget;
+                found = true;
+                break;
+            }
 
-    protected virtual StrategyGenerator MutateGenerator(StrategyGenerator prev)
-    {
-        return new StrategyGenerator(prev.InputGenerator.Mutate(), prev.Scheduler.Mutate());
-    }
+            if (!found)
+            {
+                if (_rnd.NextDouble() < 0.5)
+                {
+                    _visitedGenerators.Clear();
+                    _currentParent = _savedGenerators.First();
+                    _visitedGenerators.Add(_currentParent);
+                    _pendingMutations = _currentParent.Feedback.MutationBudget;
+                }
+                else
+                {
+                    _shouldExploreNew = true;
+                    _currentParent = null;
+                    _pendingMutations = 50;
+                }
+            }
+        }
 
-    protected virtual StrategyGenerator NewGenerator()
-    {
-        return new StrategyGenerator(Generator.InputGenerator.New(), Generator.Scheduler.New());
+        _generator = _shouldExploreNew
+            ? _mutationPolicy.CreateFresh(_generator)
+            : _mutationPolicy.Mutate(_currentParent);
+        _pendingMutations -= 1;
     }
 
     public void DumpStats(TextWriter writer)

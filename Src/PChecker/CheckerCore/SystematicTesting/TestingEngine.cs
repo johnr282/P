@@ -283,23 +283,14 @@ namespace PChecker.SystematicTesting
                         new POSScheduler(RandomValueGenerator));
                     break;
                 case StrategyType.Feedback:
-                    Strategy = new FeedbackGuidedStrategy(
-                        checkerConfiguration,
-                        new ControlledRandom(checkerConfiguration),
-                        new RandomScheduler(new ControlledRandom(checkerConfiguration)));
+                    Strategy = CreateFestStrategy(new RandomScheduler(new ControlledRandom(checkerConfiguration)));
                     break;
                 case StrategyType.FeedbackPCT:
-                    Strategy = new FeedbackGuidedStrategy(
-                        checkerConfiguration,
-                        new ControlledRandom(checkerConfiguration),
-                        new PCTScheduler(checkerConfiguration.StrategyBound, 0,
-                            new ControlledRandom(checkerConfiguration)));
+                    Strategy = CreateFestStrategy(new PCTScheduler(checkerConfiguration.StrategyBound, 0,
+                        new ControlledRandom(checkerConfiguration)));
                     break;
                 case StrategyType.FeedbackPOS:
-                    Strategy = new FeedbackGuidedStrategy(
-                        checkerConfiguration,
-                        new ControlledRandom(checkerConfiguration),
-                        new POSScheduler(new ControlledRandom(checkerConfiguration)));
+                    Strategy = CreateFestStrategy(new POSScheduler(new ControlledRandom(checkerConfiguration)));
                     break;
                 case StrategyType.MonitorGuided:
                     Strategy = new MonitorGuidedStrategy(
@@ -355,6 +346,13 @@ namespace PChecker.SystematicTesting
             //    var schedule = new ScheduleTrace(scheduleDump);
             //    Strategy = new ReplayStrategy(checkerConfiguration, schedule, isFair, Strategy);
             //}
+        }
+
+        private FeedbackGuidedStrategy CreateFestStrategy(IScheduler scheduler)
+        {
+            var policy = new FestPolicy();
+            return new FeedbackGuidedStrategy(_checkerConfiguration,
+                new ControlledRandom(_checkerConfiguration), scheduler, policy, policy);
         }
 
         /// <summary>

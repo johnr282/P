@@ -421,6 +421,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 // b' that resulted in j sending e to i. Then, b would be reachable if
                 // t_i is a prefix of t_b and b' is reachable. 
             }
+
+            throw new NotImplementedException();
         }
 
         private void UpdateStatesAndGuidance(
