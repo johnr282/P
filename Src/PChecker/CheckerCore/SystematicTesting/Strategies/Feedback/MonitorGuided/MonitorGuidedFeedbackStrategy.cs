@@ -8,7 +8,7 @@ using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
 using Plang.Compiler.TypeChecker.AST.Declarations;
 
-namespace PChecker.SystematicTesting.Strategies.Feedback;
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided;
 
 /// <summary>
 /// Receives execution observations for the monitor selected from the P test.
@@ -28,8 +28,19 @@ internal class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
         : base(configuration, inputGenerator, scheduler)
     {
         MonitorAst = monitorAst ?? throw new ArgumentNullException(nameof(monitorAst));
-        // TODO: Compute initial guidance from the AST before the campaign begins.
-        _initialGuidance = null;
+        var analyzer = new MonitorAnalyzer(MonitorAst);
+        MonitorGuidance guidance = null;
+        switch (MonitorAst.Name)
+        {
+            case "OneLeaderPerElection":
+                analyzer.GetLeaderMonitorGuidance(out guidance);
+                break;
+            case "Mutex":
+                analyzer.GetMutexMonitorGuidance(out guidance);
+                break;
+        }
+
+        _initialGuidance = guidance;
         _runGuidance = _initialGuidance?.Clone();
     }
 

@@ -28,6 +28,7 @@ using PChecker.Runtime.Logging;
 using PChecker.SystematicTesting.Strategies;
 //using PChecker.SystematicTesting.Strategies.Exhaustive;
 using PChecker.SystematicTesting.Strategies.Feedback;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
 using PChecker.SystematicTesting.Strategies.Special;
 using PChecker.SystematicTesting.Strategies.MonitorGuided;

@@ -9,6 +9,7 @@ using PChecker.Runtime.Events;
 using PChecker.Runtime.Values;
 using PChecker.SystematicTesting.Operations;
 using PChecker.SystematicTesting.Strategies.Feedback;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided;
 using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
 using Plang.Compiler;
