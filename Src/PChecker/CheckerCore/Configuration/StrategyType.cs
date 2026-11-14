@@ -24,6 +24,7 @@ namespace PChecker.Configuration
         RL,
         DFS,
         AStar,
-        Replay
+        Replay,
+        MonitorGuidedFeedback
     }
 }

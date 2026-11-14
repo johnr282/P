@@ -1,5 +1,6 @@
 ﻿using PChecker.Configuration;
 using PChecker.IO.Debugging;
+using PChecker.SystematicTesting;
 using Plang.Compiler;
 using Plang.Compiler.TypeChecker.AST.Declarations;
 using System;
@@ -12,6 +13,32 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 {
     internal static class MonitorInitializer
     {
+        internal static Machine GetMonitorForFeedback(CheckerConfiguration configuration, TestMethodInfo test)
+        {
+            var names = test.MonitorNames;
+            if (names == null)
+            {
+                throw new ArgumentException($"Test '{test.Name}' has no generated P monitor metadata. " +
+                    "Recompile the P project with this version of the compiler.");
+            }
+
+            if (names.Count != 1)
+            {
+                throw new ArgumentException($"Monitor-guided feedback requires exactly one monitor. " +
+                    $"Test '{test.Name}' configures {names.Count}.");
+            }
+
+            var matches = configuration.MonitorASTs?
+                .Where(monitor => string.Equals(monitor.Name, names[0], StringComparison.Ordinal)).ToList();
+            if (matches == null || matches.Count != 1)
+            {
+                throw new ArgumentException($"Expected one P declaration for monitor '{names[0]}' of test " +
+                    $"'{test.Name}'. Check that the .pproj matches the compiled test assembly.");
+            }
+
+            return matches[0];
+        }
+
         /// <summary>
         /// Performs parsing and type checking of the P program to extract the 
         /// monitor ASTs.

@@ -11,24 +11,25 @@ using Plang.Compiler.TypeChecker.AST.Declarations;
 namespace PChecker.SystematicTesting.Strategies.Feedback;
 
 /// <summary>
-/// Computes initial guidance once for the selected monitor AST and tracks its observations per execution.
+/// Receives execution observations for the monitor selected from the P test.
 /// </summary>
-internal abstract class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
+internal class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
 {
-    private readonly string _monitorName;
+    internal Machine MonitorAst { get; }
+
     private readonly MonitorGuidance _initialGuidance;
     private MonitorGuidance _runGuidance;
 
-    protected MonitorGuidedFeedbackStrategy(
+    internal MonitorGuidedFeedbackStrategy(
         CheckerConfiguration configuration,
         ControlledRandom inputGenerator,
         IScheduler scheduler,
         Machine monitorAst)
         : base(configuration, inputGenerator, scheduler)
     {
-        ArgumentNullException.ThrowIfNull(monitorAst);
-        _monitorName = monitorAst.Name;
-        // JR TODO: Compute guidance
+        MonitorAst = monitorAst ?? throw new ArgumentNullException(nameof(monitorAst));
+        // TODO: Compute initial guidance from the AST before the campaign begins.
+        _initialGuidance = null;
         _runGuidance = _initialGuidance?.Clone();
     }
 
@@ -46,7 +47,7 @@ internal abstract class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
         foreach (var effect in effects)
         {
             if (effect is MonitorObservationEffect observation &&
-                string.Equals(observation.MonitorName, _monitorName, StringComparison.Ordinal))
+                string.Equals(observation.MonitorName, MonitorAst.Name, StringComparison.Ordinal))
             {
                 ObserveMonitorEvent(observation, _runGuidance);
             }
@@ -58,7 +59,10 @@ internal abstract class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
 
     protected virtual void ResetMonitorProgress() { }
 
-    protected abstract void ObserveMonitorEvent(MonitorObservationEffect observation, MonitorGuidance guidance);
+    protected virtual void ObserveMonitorEvent(MonitorObservationEffect observation, MonitorGuidance guidance) { }
 
-    protected abstract SeedFeedback ComputeFeedback(TimelineObserver timeline, MonitorGuidance guidance);
+    protected virtual SeedFeedback ComputeFeedback(TimelineObserver timeline, MonitorGuidance guidance) => null;
+
+    protected override StrategyGenerator MutateRecording(GeneratorRecord parent) =>
+        throw new NotSupportedException("Monitor-guided recording mutation is not implemented.");
 }

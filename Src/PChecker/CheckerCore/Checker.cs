@@ -68,7 +68,7 @@ public static class Checker
                         break;
                     }
 
-                    if (configuration.SchedulingStrategy is StrategyType.MonitorGuided)
+                    if (configuration.SchedulingStrategy is StrategyType.MonitorGuided or StrategyType.MonitorGuidedFeedback)
                     {
                         MonitorInitializer.CompileMonitors(configuration);
                     }
@@ -76,7 +76,18 @@ public static class Checker
                     foreach (string tc in testCases)
                     {
                         configuration.TestCaseName = tc;
-                        TestingProcess.Create(configuration).Run();
+                        TestingProcess process;
+                        try
+                        {
+                            process = TestingProcess.Create(configuration);
+                        }
+                        catch (ArgumentException error) when (configuration.SchedulingStrategy == StrategyType.MonitorGuidedFeedback)
+                        {
+                            Error.CheckerReportAndExit(error.Message);
+                            return;
+                        }
+
+                        process.Run();
                     }
                     break;
                 case CheckerMode.PEx:

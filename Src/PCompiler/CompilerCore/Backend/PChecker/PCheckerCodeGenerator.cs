@@ -381,7 +381,7 @@ namespace Plang.Compiler.Backend.CSharp
             WriteInitializeInterfaceDefMap(context, output, safety.ModExpr.ModuleInfo.InterfaceDef);
             WriteInitializeMonitorObserves(context, output, safety.ModExpr.ModuleInfo.MonitorMap.Keys);
             WriteInitializeMonitorMap(context, output, safety.ModExpr.ModuleInfo.MonitorMap);
-            WriteTestFunction(context, output, safety.Main, true);
+            WriteTestFunction(context, output, safety.Main, true, safety.ModExpr.ModuleInfo.MonitorMap.Keys);
             context.WriteLine(output, "}");
 
             WriteNameSpaceEpilogue(context, output);
@@ -396,7 +396,7 @@ namespace Plang.Compiler.Backend.CSharp
             WriteInitializeInterfaceDefMap(context, output, impl.ModExpr.ModuleInfo.InterfaceDef);
             WriteInitializeMonitorObserves(context, output, impl.ModExpr.ModuleInfo.MonitorMap.Keys);
             WriteInitializeMonitorMap(context, output, impl.ModExpr.ModuleInfo.MonitorMap);
-            WriteTestFunction(context, output, impl.Main, false);
+            WriteTestFunction(context, output, impl.Main, false, impl.ModExpr.ModuleInfo.MonitorMap.Keys);
             context.WriteLine(output, "}");
 
             WriteNameSpaceEpilogue(context, output);
@@ -459,10 +459,12 @@ namespace Plang.Compiler.Backend.CSharp
             context.WriteLine(output, "}");
         }
 
-        private void WriteTestFunction(CompilationContext context, StringWriter output, string main, bool ifInitGlobalParams)
+        private void WriteTestFunction(CompilationContext context, StringWriter output, string main,
+            bool ifInitGlobalParams, IEnumerable<Machine> monitors)
         {
             context.WriteLine(output);
-            context.WriteLine(output, "[PChecker.SystematicTesting.Test]");
+            var monitorNames = string.Join(", ", monitors.Select(monitor => $"\"{monitor.Name}\""));
+            context.WriteLine(output, $"[PChecker.SystematicTesting.Test(new string[] {{ {monitorNames} }})]");
             context.WriteLine(output, "public static void Execute(ControlledRuntime runtime) {");
             if (ifInitGlobalParams) { context.WriteLine(output, $"{InitGlobalParamsFunctionName}();"); }
             context.WriteLine(output, "runtime.RegisterLog(new PCheckerLogTextFormatter());");

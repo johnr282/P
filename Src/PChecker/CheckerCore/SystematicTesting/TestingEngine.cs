@@ -292,6 +292,13 @@ namespace PChecker.SystematicTesting
                 case StrategyType.FeedbackPOS:
                     Strategy = CreateFestStrategy(new POSScheduler(new ControlledRandom(checkerConfiguration)));
                     break;
+                case StrategyType.MonitorGuidedFeedback:
+                    Strategy = new MonitorGuidedFeedbackStrategy(
+                        checkerConfiguration,
+                        new ControlledRandom(checkerConfiguration),
+                        new RandomScheduler(new ControlledRandom(checkerConfiguration)),
+                        MonitorInitializer.GetMonitorForFeedback(checkerConfiguration, testMethodInfo));
+                    break;
                 case StrategyType.MonitorGuided:
                     Strategy = new MonitorGuidedStrategy(
                         checkerConfiguration.MaxUnfairSchedulingSteps,

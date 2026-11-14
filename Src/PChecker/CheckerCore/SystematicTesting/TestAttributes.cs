@@ -12,6 +12,16 @@ namespace PChecker.SystematicTesting
     [AttributeUsage(AttributeTargets.Method)]
     public sealed class TestAttribute : Attribute
     {
+        public TestAttribute()
+        {
+        }
+
+        /// <summary>
+        /// Declares the P monitor names resolved for a compiler-generated test.
+        /// </summary>
+        public TestAttribute(string[] monitorNames) => MonitorNames = monitorNames;
+
+        internal string[] MonitorNames { get; }
     }
 
     /// <summary>

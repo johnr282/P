@@ -82,6 +82,7 @@ namespace Plang.Options
                 "sch-feedbackpos",
                 "sch-feedback",
                 "sch-monitorguided",
+                "sch-monitorguidedfeedback",
                 "sch-probabilistic",
                 "sch-pct",
                 "sch-fairpct",
@@ -144,6 +145,8 @@ namespace Plang.Options
             schedulingGroup.AddArgument("sch-fairpct", null, "Choose the fair PCT scheduling strategy with given maximum number of priority switch points", typeof(uint));
             schedulingGroup.AddArgument("sch-rl", null, "Choose the reinforcement learning (RL) scheduling strategy", typeof(bool)).IsHidden = true;
             schedulingGroup.AddArgument("sch-monitorguided", null, "Choose the random scheduling strategy with monitor guidance", typeof(bool));
+            schedulingGroup.AddArgument("sch-monitorguidedfeedback", null,
+                "Choose monitor-guided feedback scheduling for a P test with one monitor", typeof(bool));
 
             var predictors = schedulingGroup.AddArgument("sch-monitorguided-predictor", null,
                 "Choose the monitor-guided predictor (exact or null; default: exact)");
@@ -390,6 +393,9 @@ namespace Plang.Options
                 case "sch-monitorguided":
                     strategyType = StrategyType.MonitorGuided;
                     break;
+                case "sch-monitorguidedfeedback":
+                    strategyType = StrategyType.MonitorGuidedFeedback;
+                    break;
                 case "sch-probabilistic":
                     strategyType = StrategyType.Probabilistic;
                     break;
@@ -484,8 +490,15 @@ namespace Plang.Options
 
         private static void CreateCompilerConfigIfNecessary(CheckerConfiguration configuration, string projectFile)
         {
-            if (configuration.SchedulingStrategy is StrategyType.MonitorGuided)
+            if (configuration.SchedulingStrategy is StrategyType.MonitorGuided or StrategyType.MonitorGuidedFeedback)
             {
+                if (configuration.SchedulingStrategy == StrategyType.MonitorGuidedFeedback &&
+                    configuration.Mode != CheckerMode.BugFinding)
+                {
+                    Error.CheckerReportAndExit("--sch-monitorguidedfeedback requires bugfinding mode.");
+                    return;
+                }
+
                 if (projectFile == null)
                 {
                     Error.CheckerReportAndExit(

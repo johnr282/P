@@ -32,6 +32,8 @@ namespace PChecker.SystematicTesting
         /// </summary>
         internal readonly string Name;
 
+        internal IReadOnlyList<string> MonitorNames => Method.Method.GetCustomAttribute<TestAttribute>()?.MonitorNames;
+
         /// <summary>
         /// The test initialization method.
         /// </summary>
