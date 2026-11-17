@@ -25,7 +25,6 @@ using PChecker.Runtime.StateMachines.Exceptions;
 using PChecker.Runtime.StateMachines.Managers;
 using PChecker.SystematicTesting.Operations;
 using PChecker.SystematicTesting.Strategies;
-using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using PChecker.SystematicTesting.Strategies.Liveness;
 using PChecker.SystematicTesting.Traces;
 using Debug = PChecker.IO.Debugging.Debug;
@@ -237,7 +236,7 @@ namespace PChecker.SystematicTesting
             CoverageInfo = new CoverageInfo();
 
             var scheduleTrace = new ScheduleTrace();
-            if (checkerConfiguration.IsLivenessCheckingEnabled && strategy is not MonitorGuidedStrategy)
+            if (checkerConfiguration.IsLivenessCheckingEnabled)
             {
                 strategy = new TemperatureCheckingStrategy(checkerConfiguration, Monitors, strategy);
             }
@@ -672,17 +671,7 @@ namespace PChecker.SystematicTesting
         public void RegisterMonitor<T>(string monitorASTName)
             where T : Monitor
         {
-            var monitor = TryCreateMonitor(typeof(T), monitorASTName);
-
-            if (monitor != null &&
-                CheckerConfiguration.SchedulingStrategy == StrategyType.MonitorGuided)
-            {
-                var strategy = Scheduler.Strategy as MonitorGuidedStrategy;
-                var monitorAST = MonitorInitializer.GetCorrespondingMonitorAST(
-                    CheckerConfiguration, 
-                    monitorASTName);
-                strategy.RegisterMonitor(monitorAST, monitor);
-            }
+            TryCreateMonitor(typeof(T), monitorASTName);
         }
             
 

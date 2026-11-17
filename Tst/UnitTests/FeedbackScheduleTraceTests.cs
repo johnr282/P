@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using PChecker.Configuration;
@@ -9,25 +10,21 @@ using PChecker.Runtime.Events;
 using PChecker.Runtime.Values;
 using PChecker.SystematicTesting.Operations;
 using PChecker.SystematicTesting.Strategies.Feedback;
-using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided;
-using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
-using Plang.Compiler;
+using PChecker.SystematicTesting.Traces;
 using ControlledRuntime = PChecker.SystematicTesting.ControlledRuntime;
-using Machine = Plang.Compiler.TypeChecker.AST.Declarations.Machine;
 using Monitor = PChecker.Runtime.Specifications.Monitor;
 
 namespace UnitTests;
 
 [TestFixture]
-public class MonitorGuidedFeedbackStrategyTests
+public class FeedbackScheduleTraceTests
 {
     [Test]
-    public async Task ReceivesBatchedMonitorEffectsAndResetsBetweenIterations()
+    public async Task FeedbackReceivesCompletedTraceWithObservationPositions()
     {
-        var ast = new Machine("Target", new PParser.SpecMachineDeclContext(null, 0));
         var configuration = CheckerConfiguration.Create();
-        var strategy = new TestStrategy(configuration, ast);
+        var strategy = new TestStrategy(configuration);
 
         await Task.Run(async () =>
         {
@@ -43,38 +40,41 @@ public class MonitorGuidedFeedbackStrategyTests
             }), "monitor-effects");
             await runtime.WaitAsync().WaitAsync(TimeSpan.FromSeconds(10));
             Assert.That(runtime.Scheduler.BugFound, Is.False, runtime.Scheduler.BugReport);
-            Assert.That(runtime.Scheduler.ScheduleTrace.Count, Is.EqualTo(2));
+            var trace = runtime.Scheduler.ScheduleTrace;
+            strategy.ObserveRunningResults(new TimelineObserver(), trace);
+            Assert.That(strategy.FeedbackTrace, Is.SameAs(trace));
+            Assert.That(strategy.FeedbackTrace.Count, Is.EqualTo(2));
+            Assert.That(strategy.FeedbackTrace.All(step => step.BooleanChoice.HasValue), Is.True);
         });
 
-        strategy.ObserveRunningResults(new TimelineObserver());
-        Assert.That(strategy.Observations, Has.Count.EqualTo(1));
-        var observation = strategy.Observations[0];
+        Assert.That(strategy.Observations.Select(observation => observation.MonitorName),
+            Is.EqualTo(new[] { "Other", "Target" }));
+        var observation = strategy.Observations[1];
         Assert.That(observation.MonitorName, Is.EqualTo("Target"));
         Assert.That(observation.ObservedEvent.Payload, Is.EqualTo(new PInt(7)));
         Assert.That(observation.Ignored, Is.True);
         Assert.That(observation.TracePosition, Is.EqualTo(1));
-
-        strategy.PrepareForNextIteration();
-        strategy.ObserveRunningResults(new TimelineObserver());
-        Assert.That(strategy.Observations, Is.Empty);
     }
 
-    private sealed class TestStrategy : MonitorGuidedFeedbackStrategy
+    private sealed class TestStrategy : FeedbackGuidedStrategy
     {
-        internal TestStrategy(CheckerConfiguration configuration, Machine ast)
+        internal TestStrategy(CheckerConfiguration configuration)
             : base(configuration, new ControlledRandom(configuration),
-                new RandomScheduler(new ControlledRandom(configuration)), ast)
+                new RandomScheduler(new ControlledRandom(configuration)))
         {
         }
 
         internal List<MonitorObservationEffect> Observations { get; } = new();
+        internal ScheduleTrace FeedbackTrace { get; private set; }
 
-        protected override void ResetMonitorProgress() => Observations.Clear();
+        public override void NotifyEffects(SchedulingChoice lastChoice, IReadOnlyList<ExecutionEffect> effects,
+            bool completeBehavior) => Observations.AddRange(effects.OfType<MonitorObservationEffect>());
 
-        protected override void ObserveMonitorEvent(MonitorObservationEffect observation, MonitorGuidance guidance) =>
-            Observations.Add(observation);
-
-        protected override SeedFeedback ComputeFeedback(TimelineObserver timeline, MonitorGuidance guidance) => null;
+        protected override SeedFeedback ComputeFeedback(TimelineObserver timeline, ScheduleTrace scheduleTrace)
+        {
+            FeedbackTrace = scheduleTrace;
+            return null;
+        }
 
         protected override StrategyGenerator MutateRecording(GeneratorRecord parent) =>
             throw new NotSupportedException();

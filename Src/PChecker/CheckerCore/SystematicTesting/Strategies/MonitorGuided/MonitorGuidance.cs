@@ -1,4 +1,6 @@
-﻿using PChecker.Runtime.Events;
+﻿using Microsoft.Z3;
+using PChecker.Runtime.Events;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solver;
 using Plang.Compiler.TypeChecker.AST.States;
@@ -13,11 +15,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 {
     internal class MonitorGuidance
     {
-        public SymExpr ViolationCondition { get; set; }
-
-        public int GuidanceIndex { get; set; } = 0;
-
-        public bool Valid { get; set; } = true;
+        private SymExpr _violationCondition;
+        private int _guidanceIndex = 0;
 
         /// <summary>
         /// At s = ViolatingExecution[i], the monitor was in state s.state and 
@@ -25,21 +24,57 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
         /// </summary>
         private readonly IReadOnlyList<(SymEvent e, State state)> _violatingExecution;
 
+        public bool Valid { get; private set; } = true;
+
+
         public MonitorGuidance(
             IReadOnlyList<(SymEvent e, State state)> violatingExecution, 
             SymExpr violationCondition)
         {
             _violatingExecution = violatingExecution;
-            ViolationCondition = violationCondition;
+            _violationCondition = violationCondition;
         }
 
-        public SymEvent GetNextGoalEvent() =>
-            _violatingExecution[GuidanceIndex].e;
+        private SymEvent NextGoalEvent =>
+            _violatingExecution[_guidanceIndex].e;
 
-        public State GetCurrentMonitorState() => 
-            _violatingExecution[GuidanceIndex].state;
+        public State CurrentMonitorState => 
+            _violatingExecution[_guidanceIndex].state;
 
-        public bool ViolationReached => GuidanceIndex == _violatingExecution.Count;
+        public bool ViolationReached => _guidanceIndex == _violatingExecution.Count;
+
+        public int DistanceToViolation => _violatingExecution.Count - _guidanceIndex;
+
+        /// <summary>
+        /// Updates guidance as if the monitor handled the given event.
+        /// </summary>
+        public void Update(Event e, ISolver solver)
+        {
+            if (ViolationReached || !Valid)
+                return;
+
+            SymEvent goalEvent = NextGoalEvent;
+
+            var concretePayload = new ConcreteExpr(
+                e.Payload?.Clone(),
+                goalEvent.Payload.Type);
+
+            var candidateCondition = SymExprFactory.And(
+                _violationCondition,
+                SymExprFactory.Equal(goalEvent.Payload, concretePayload));
+
+            bool isGoalEvent = MonitorAnalyzer.EventTypeMatches(goalEvent.Event, e) &&
+                solver.CheckSat(candidateCondition) == SatResult.Sat;
+
+            if (isGoalEvent)
+            {
+                _guidanceIndex++;
+                _violationCondition = candidateCondition;
+                return;
+            }
+
+            Valid = false;
+        }
 
         public MonitorGuidance Clone()
         {
@@ -51,9 +86,9 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
 
             return new MonitorGuidance(
                 violatingExecution,
-                SymExprFactory.CloneSymExpr(ViolationCondition))
+                SymExprFactory.CloneSymExpr(_violationCondition))
             {
-                GuidanceIndex = this.GuidanceIndex
+                _guidanceIndex = this._guidanceIndex
             };
         }
     }

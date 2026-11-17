@@ -2,6 +2,7 @@ using PChecker.Configuration;
 using PChecker.Feedback;
 using PChecker.Generator.Object;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
+using PChecker.SystematicTesting.Traces;
 
 namespace PChecker.SystematicTesting.Strategies.Feedback;
 
@@ -14,7 +15,7 @@ internal sealed class FestStrategy : FeedbackGuidedStrategy
     {
     }
 
-    protected override SeedFeedback ComputeFeedback(TimelineObserver timeline)
+    protected override SeedFeedback ComputeFeedback(TimelineObserver timeline, ScheduleTrace scheduleTrace)
     {
         var (score, minHash) = _diversity.Measure(timeline);
         if (score == 0)

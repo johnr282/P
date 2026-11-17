@@ -7,6 +7,7 @@ using PChecker.Feedback;
 using PChecker.Generator.Object;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
 using PChecker.SystematicTesting.Operations;
+using PChecker.SystematicTesting.Traces;
 
 namespace PChecker.SystematicTesting.Strategies.Feedback;
 
@@ -25,7 +26,7 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     private readonly System.Random _rnd = new();
 
     private StrategyGenerator _generator;
-    private int _scheduledSteps;
+    protected int ScheduledSteps { get; private set; }
     private int _pendingMutations;
     private bool _shouldExploreNew;
     private GeneratorRecord _currentParent;
@@ -43,31 +44,34 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     public bool GetNextSchedulingChoice(
         SchedulingChoice lastChoice, IEnumerable<SchedulingChoice> choices, out SchedulingChoice next)
     {
+        _generator = BeforeChoice(_generator);
         var result = _generator.Scheduler.GetNextSchedulingChoice(lastChoice, choices, out next);
-        _scheduledSteps++;
+        ScheduledSteps++;
         return result;
     }
 
     /// <inheritdoc/>
     public bool GetNextBooleanChoice(SchedulingChoice lastChoice, int maxValue, out bool next)
     {
+        _generator = BeforeChoice(_generator);
         next = _generator.InputGenerator.Next(maxValue) == 0;
-        _scheduledSteps++;
+        ScheduledSteps++;
         return true;
     }
 
     /// <inheritdoc/>
     public bool GetNextIntegerChoice(SchedulingChoice lastChoice, int maxValue, out int next)
     {
+        _generator = BeforeChoice(_generator);
         next = _generator.InputGenerator.Next(maxValue);
-        _scheduledSteps++;
+        ScheduledSteps++;
         return true;
     }
 
     /// <inheritdoc/>
     public virtual bool PrepareForNextIteration()
     {
-        _scheduledSteps = 0;
+        ScheduledSteps = 0;
         PrepareNextInput();
         return true;
     }
@@ -75,7 +79,7 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     /// <inheritdoc/>
     public int GetScheduledSteps()
     {
-        return _scheduledSteps;
+        return ScheduledSteps;
     }
 
     /// <inheritdoc/>
@@ -86,7 +90,7 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
             return false;
         }
 
-        return _scheduledSteps >= _maxScheduledSteps;
+        return ScheduledSteps >= _maxScheduledSteps;
     }
 
     /// <inheritdoc/>
@@ -104,7 +108,7 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     /// <inheritdoc/>
     public void Reset()
     {
-        _scheduledSteps = 0;
+        ScheduledSteps = 0;
     }
 
     /// <inheritdoc/>
@@ -113,9 +117,9 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     {
     }
 
-    public void ObserveRunningResults(TimelineObserver timelineObserver)
+    public void ObserveRunningResults(TimelineObserver timelineObserver, ScheduleTrace scheduleTrace)
     {
-        var feedback = ComputeFeedback(timelineObserver);
+        var feedback = ComputeFeedback(timelineObserver, scheduleTrace);
         if (feedback is null)
         {
             return;
@@ -196,10 +200,16 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
 
     /// <summary>
     /// Returns feedback for an admitted recording, or null to discard it.
+    /// The schedule trace belongs to the completed run. Copy any steps needed after this call.
     /// </summary>
-    protected abstract SeedFeedback ComputeFeedback(TimelineObserver timeline);
+    protected abstract SeedFeedback ComputeFeedback(TimelineObserver timeline, ScheduleTrace scheduleTrace);
 
     protected abstract StrategyGenerator MutateRecording(GeneratorRecord parent);
+
+    /// <summary>
+    /// Runs at the current choice position before either random stream is used.
+    /// </summary>
+    protected virtual StrategyGenerator BeforeChoice(StrategyGenerator current) => current;
 
     protected virtual StrategyGenerator CreateFreshGenerator(StrategyGenerator current) =>
         new(current.InputGenerator.New(), current.Scheduler.New());

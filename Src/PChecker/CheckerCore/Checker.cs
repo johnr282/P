@@ -68,7 +68,13 @@ public static class Checker
                         break;
                     }
 
-                    if (configuration.SchedulingStrategy is StrategyType.MonitorGuided or StrategyType.MonitorGuidedFeedback)
+                    if (configuration.SchedulingStrategy == StrategyType.MonitorGuided)
+                    {
+                        Error.CheckerReportAndExit("The monitor-guided scheduling strategy is disabled.");
+                        return;
+                    }
+
+                    if (configuration.SchedulingStrategy == StrategyType.MonitorGuidedFeedback)
                     {
                         MonitorInitializer.CompileMonitors(configuration);
                     }

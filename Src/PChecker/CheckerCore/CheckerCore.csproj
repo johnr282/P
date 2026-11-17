@@ -27,6 +27,10 @@
 		<Compile Remove="SystematicTesting\Strategies\Exhaustive\DFSStrategy.cs" />
 		<Compile Remove="SystematicTesting\Strategies\Special\ComboStrategy.cs" />
 		<Compile Remove="SystematicTesting\Strategies\Probabilistic\QLearningStrategy.cs" />
+		<Compile Remove="SystematicTesting\Strategies\MonitorGuided\MonitorGuidedStrategy.cs" />
+		<None Include="SystematicTesting\Strategies\MonitorGuided\MonitorGuidedStrategy.cs" />
+		<Compile Remove="SystematicTesting\Strategies\MonitorGuided\MonitorAnalyzer.cs" />
+		<None Include="SystematicTesting\Strategies\MonitorGuided\MonitorAnalyzer.cs" />
 	</ItemGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\PCompiler\CompilerCore\CompilerCore.csproj" />

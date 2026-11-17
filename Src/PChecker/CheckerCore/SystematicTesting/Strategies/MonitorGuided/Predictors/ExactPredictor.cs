@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using ASTEvent = Plang.Compiler.TypeChecker.AST.Declarations.Event;
+using FeedbackMonitorAnalyzer = PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.MonitorAnalyzer;
 using RuntimeEvent = PChecker.Runtime.Events.Event;
 
 namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
@@ -125,7 +126,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
                     continue;
 
                 if (_observedEventTypes != null && _observedEventTypes.Any(ev =>
-                    MonitorGuidedStrategy.EventTypeMatches(ev, observation.ObservedEvent)))
+                    FeedbackMonitorAnalyzer.EventTypeMatches(ev, observation.ObservedEvent)))
                 {
                     observedEvents.Add(observation.ObservedEvent);
                 }

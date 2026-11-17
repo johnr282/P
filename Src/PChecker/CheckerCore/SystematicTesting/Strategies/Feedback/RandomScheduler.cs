@@ -6,9 +6,9 @@ using PChecker.SystematicTesting.Operations;
 
 namespace PChecker.SystematicTesting.Strategies.Probabilistic;
 
-internal class RandomScheduler : IScheduler
+internal class RandomScheduler : IReconfigurableScheduler
 {
-    private readonly IRandomValueGenerator _randomValueGenerator;
+    private IRandomValueGenerator _randomValueGenerator;
     public RandomScheduler(IRandomValueGenerator randomValueGenerator)
     {
         _randomValueGenerator = randomValueGenerator;
@@ -30,6 +30,11 @@ internal class RandomScheduler : IScheduler
     public bool PrepareForNextIteration()
     {
         return true;
+    }
+
+    public void Reconfig(int seed)
+    {
+        _randomValueGenerator = new ControlledRandom(new System.Random(seed));
     }
 
     IScheduler IScheduler.Mutate()

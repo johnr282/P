@@ -32,7 +32,6 @@ using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
 using PChecker.SystematicTesting.Strategies.Special;
 using PChecker.SystematicTesting.Strategies.MonitorGuided;
-using PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors;
 using PChecker.SystematicTesting.Traces;
 using PChecker.Utilities;
 using Debug = PChecker.IO.Debugging.Debug;
@@ -296,22 +295,7 @@ namespace PChecker.SystematicTesting
                 case StrategyType.MonitorGuidedFeedback:
                     Strategy = new MonitorGuidedFeedbackStrategy(
                         checkerConfiguration,
-                        new ControlledRandom(checkerConfiguration),
-                        new RandomScheduler(new ControlledRandom(checkerConfiguration)),
                         MonitorInitializer.GetMonitorForFeedback(checkerConfiguration, testMethodInfo));
-                    break;
-                case StrategyType.MonitorGuided:
-                    Strategy = new MonitorGuidedStrategy(
-                        checkerConfiguration.MaxUnfairSchedulingSteps,
-                        RandomValueGenerator,
-                        checkerConfiguration.MonitorGuidedPredictor switch
-                        {
-                            MonitorGuidedPredictorType.Exact => new ExactPredictor(),
-                            MonitorGuidedPredictorType.Null => new NullPredictor(),
-                            var predictor => throw new InvalidOperationException(
-                                $"Unknown monitor-guided predictor '{predictor}'."),
-                        },
-                        fallbackStrategy: null);
                     break;
                 case StrategyType.Replay:
                     var scheduleDump = GetScheduleForReplay(out var isFair);
@@ -609,7 +593,7 @@ namespace PChecker.SystematicTesting
 
                 if (Strategy is IFeedbackGuidedStrategy strategy)
                 {
-                    strategy.ObserveRunningResults(timelineObserver);
+                    strategy.ObserveRunningResults(timelineObserver, runtime.Scheduler.ScheduleTrace);
                 }
 
                 // Checks that no monitor is in a hot state at termination. Only

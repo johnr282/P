@@ -1,6 +1,7 @@
 ﻿using PChecker.Configuration;
 using Plang.Compiler;
 using PChecker.Runtime.Exceptions;
+using PChecker.Runtime.Events;
 using PChecker.IO.Debugging;
 using Plang.Compiler.TypeChecker.AST.Declarations;
 using System;
@@ -504,15 +505,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
             // or monitor fields, they must be removed; violation condition should
             // only contain constraints over symbolic event payloads
             return new MonitorGuidance(execution, violationCondition);
-        }
-
-        /// <summary>
-        /// Returns whether the given event is observed by the monitor.
-        /// </summary>
-        internal bool IsEventObserved(RuntimeEvent e)
-        {
-            return _monitorAST.Observes.Events.Any(
-                ev => MonitorGuidedStrategy.EventTypeMatches(ev, e));
         }
 
         internal enum SearchStrategy

@@ -7,6 +7,7 @@ using PChecker.Runtime.Events;
 using PChecker.Runtime.StateMachines;
 using PChecker.SystematicTesting.Strategies.Feedback;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
+using PChecker.SystematicTesting.Traces;
 
 namespace UnitTests;
 
@@ -17,15 +18,16 @@ public class FeedbackGuidedStrategyTests
     public void FestTracksNovelTimelinesPerCampaign()
     {
         var timeline = new TimelineObserver();
+        var trace = new ScheduleTrace();
         var configuration = CheckerConfiguration.Create();
         var firstStrategy = new FestStrategy(configuration, new ControlledRandom(configuration),
             new RandomScheduler(new ControlledRandom(configuration)));
         var secondStrategy = new FestStrategy(configuration, new ControlledRandom(configuration),
             new RandomScheduler(new ControlledRandom(configuration)));
 
-        firstStrategy.ObserveRunningResults(timeline);
-        firstStrategy.ObserveRunningResults(timeline);
-        secondStrategy.ObserveRunningResults(timeline);
+        firstStrategy.ObserveRunningResults(timeline, trace);
+        firstStrategy.ObserveRunningResults(timeline, trace);
+        secondStrategy.ObserveRunningResults(timeline, trace);
 
         Assert.That(firstStrategy.TotalSavedInputs(), Is.EqualTo(1));
         Assert.That(secondStrategy.TotalSavedInputs(), Is.EqualTo(1));
@@ -60,10 +62,10 @@ public class FeedbackGuidedStrategyTests
         var strategy = new DuplicateTimelineStrategy(configuration, new ControlledRandom(configuration),
             new RandomScheduler(new ControlledRandom(configuration)));
 
-        strategy.ObserveRunningResults(new TimelineObserver());
+        strategy.ObserveRunningResults(new TimelineObserver(), new ScheduleTrace());
         Assert.That(strategy.TotalSavedInputs(), Is.Zero);
 
-        strategy.ObserveRunningResults(new TimelineObserver());
+        strategy.ObserveRunningResults(new TimelineObserver(), new ScheduleTrace());
         Assert.That(strategy.TotalSavedInputs(), Is.EqualTo(1));
 
         strategy.PrepareForNextIteration();
@@ -82,7 +84,7 @@ public class FeedbackGuidedStrategyTests
 
         internal GeneratorRecord Parent { get; private set; }
 
-        protected override SeedFeedback ComputeFeedback(TimelineObserver timeline)
+        protected override SeedFeedback ComputeFeedback(TimelineObserver timeline, ScheduleTrace scheduleTrace)
         {
             var (score, minHash) = _diversity.Measure(timeline);
             if (score != 0)

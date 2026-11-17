@@ -167,10 +167,8 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 IReadOnlyList<ExecutionEffect> prefix, 
                 IReadOnlyList<ExecutionEffect> effects)
             {
-                return MonitorGuidedStrategy.PrefixOf(
-                    prefix, 
-                    effects, 
-                    BehaviorStoreComparers.EffectEquality);
+                return effects.Count >= prefix.Count &&
+                    effects.Take(prefix.Count).SequenceEqual(prefix, BehaviorStoreComparers.EffectEquality);
             }
         }
 

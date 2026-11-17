@@ -1,10 +1,14 @@
-﻿using System.Linq;
+﻿using PChecker.Runtime.Events;
 using PChecker.Runtime.Exceptions;
 using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution;
 using Plang.Compiler.TypeChecker.AST.Declarations;
 using Plang.Compiler.TypeChecker.AST.States;
 using Plang.Compiler.TypeChecker.Types;
+using System;
+using System.Linq;
+using ASTEvent = Plang.Compiler.TypeChecker.AST.Declarations.Event;
+using RuntimeEvent = PChecker.Runtime.Events.Event;
 
 namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
 {
@@ -50,7 +54,7 @@ namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
             return true;
         }
 
-        private MonitorGuidance CreateTwoEventGuidance(Event eventType, string payloadField, string monitorField,
+        private MonitorGuidance CreateTwoEventGuidance(ASTEvent eventType, string payloadField, string monitorField,
             string startStateName, string nextStateName)
         {
             RequireIntegerPayloadField(eventType, payloadField);
@@ -89,11 +93,11 @@ namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
             }, condition);
         }
 
-        private static bool HandlesEvent(State state, Event eventType) =>
+        private static bool HandlesEvent(State state, ASTEvent eventType) =>
             state.AllEventHandlers.Any(handler => handler.Key == eventType &&
                 handler.Value is EventDoAction or EventGotoState);
 
-        private static void RequireIntegerPayloadField(Event eventType, string fieldName)
+        private static void RequireIntegerPayloadField(ASTEvent eventType, string fieldName)
         {
             if (eventType.PayloadType?.Canonicalize() is not NamedTupleType payloadType ||
                 !payloadType.LookupEntry(fieldName, out var entry) || !entry.Type.IsSameTypeAs(PrimitiveType.Int))
@@ -101,6 +105,40 @@ namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
                 throw new PInternalException($"Guidance requires event '{eventType.Name}' to have an integer " +
                     $"'{fieldName}' payload field.");
             }
+        }
+
+        /// <summary>
+        /// Returns whether the given event is handled by the given monitor at the 
+        /// given state.
+        /// </summary>
+        internal static bool EventHandledByMonitor(RuntimeEvent e, Machine monitorAST, State monitorState)
+        {
+            if (e == null ||
+                !IsEventObserved(e, monitorAST))
+                return false;
+
+            return monitorState.AllEventHandlers.Any(handler =>
+                EventTypeMatches(handler.Key, e) &&
+                handler.Value is not EventIgnore);
+        }
+
+        /// <summary>
+        /// Returns whether the given event is observed by the monitor.
+        /// </summary>
+        internal static bool IsEventObserved(RuntimeEvent e, Machine monitorAST)
+        {
+            return monitorAST.Observes.Events.Any(ev => EventTypeMatches(ev, e));
+        }
+
+        internal static bool EventTypeMatches(ASTEvent expected, RuntimeEvent actual)
+        {
+            if (expected.IsHaltEvent)
+                return actual is PHalt;
+
+            if (expected.IsNullEvent)
+                return actual is DefaultEvent;
+
+            return string.Equals(expected.Name, actual.GetType().Name, StringComparison.Ordinal);
         }
     }
 }
