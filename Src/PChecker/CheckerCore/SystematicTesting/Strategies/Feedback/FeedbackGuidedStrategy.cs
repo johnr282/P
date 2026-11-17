@@ -12,7 +12,7 @@ using PChecker.SystematicTesting.Traces;
 namespace PChecker.SystematicTesting.Strategies.Feedback;
 
 
-internal record SeedFeedback(int Priority, int MutationBudget);
+internal record SeedFeedback(double Priority, int MutationBudget);
 
 internal record StrategyGenerator(ControlledRandom InputGenerator, IScheduler Scheduler);
 
@@ -20,13 +20,14 @@ internal record GeneratorRecord(SeedFeedback Feedback, StrategyGenerator Generat
 
 internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
 {
-    private readonly int _maxScheduledSteps;
     private readonly List<GeneratorRecord> _savedGenerators = new();
     private readonly HashSet<GeneratorRecord> _visitedGenerators = new();
     private readonly System.Random _rnd = new();
 
     private StrategyGenerator _generator;
+    protected readonly int MaxScheduledSteps;
     protected int ScheduledSteps { get; private set; }
+    protected const int DefaultMutationBudget = 50;
     private int _pendingMutations;
     private bool _shouldExploreNew;
     private GeneratorRecord _currentParent;
@@ -36,7 +37,7 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
         ControlledRandom inputGenerator,
         IScheduler scheduler)
     {
-        _maxScheduledSteps = checkerConfiguration.MaxUnfairSchedulingSteps;
+        MaxScheduledSteps = checkerConfiguration.MaxUnfairSchedulingSteps;
         _generator = new StrategyGenerator(inputGenerator, scheduler);
     }
 
@@ -85,12 +86,12 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     /// <inheritdoc/>
     public bool HasReachedMaxSchedulingSteps()
     {
-        if (_maxScheduledSteps == 0)
+        if (MaxScheduledSteps == 0)
         {
             return false;
         }
 
-        return ScheduledSteps >= _maxScheduledSteps;
+        return ScheduledSteps >= MaxScheduledSteps;
     }
 
     /// <inheritdoc/>
@@ -157,7 +158,7 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
         {
             _currentParent = _savedGenerators.First();
             _visitedGenerators.Add(_currentParent);
-            _pendingMutations = 50;
+            _pendingMutations = _currentParent.Feedback.MutationBudget;
         }
 
         if (_pendingMutations == 0)
@@ -187,7 +188,7 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
                 {
                     _shouldExploreNew = true;
                     _currentParent = null;
-                    _pendingMutations = 50;
+                    _pendingMutations = DefaultMutationBudget;
                 }
             }
         }

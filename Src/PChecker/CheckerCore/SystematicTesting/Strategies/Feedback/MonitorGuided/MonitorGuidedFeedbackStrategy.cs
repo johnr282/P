@@ -29,7 +29,7 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
     private ImmutableArray<RecordedStep> _expectedPrefix = ImmutableArray<RecordedStep>.Empty;
     private int _nextReconfiguration;
 
-    private record ExecutionPrefixScore(int Length, int DistanceToViolation);
+    private record ExecutionPrefix(int Length, int DistanceToViolation);
 
     private readonly record struct RecordedStep(
         ScheduleStepType Type, ulong OperationId, int ChoiceId, bool? BooleanChoice, int? IntegerChoice);
@@ -39,11 +39,11 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
     private sealed record ReplayPlan(int SchedulerSeed, int InputSeed, ImmutableArray<Reconfiguration> Reconfigurations);
 
     private sealed record MonitorGuidedSeedFeedback(
-        int Priority, int MutationBudget, ImmutableArray<RecordedStep> ExecutionPrefix, ReplayPlan ReplayPlan)
+        double Priority, int MutationBudget, ImmutableArray<RecordedStep> ExecutionPrefix, ReplayPlan ReplayPlan)
         : SeedFeedback(Priority, MutationBudget);
 
-    private ExecutionPrefixScore _bestPrefix = null;
-    private ExecutionPrefixScore _currentRunBestPrefix = null;
+    private ExecutionPrefix _bestPrefix = null;
+    private ExecutionPrefix _currentRunBestPrefix = null;
 
     internal MonitorGuidedFeedbackStrategy(
         CheckerConfiguration configuration,
@@ -94,8 +94,18 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
     {
         foreach (var effect in effects)
         {
-            if (effect is MonitorObservationEffect observation &&
-                string.Equals(observation.MonitorName, _monitorAST.Name, StringComparison.Ordinal))
+            if (effect is not MonitorObservationEffect observation)
+            {
+                continue;
+            }
+
+            if (observation.TracePosition == 0)
+            {
+                throw new PInternalException(
+                    $"Monitor '{observation.MonitorName}' observed an event before the first recorded trace step.");
+            }
+
+            if (string.Equals(observation.MonitorName, _monitorAST.Name, StringComparison.Ordinal))
             {
                 UpdateCurrentRunBestPrefix(observation);
             }
@@ -118,7 +128,7 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
 
         int prefixLength = observation.TracePosition;
         int prefixViolationDistance = _runGuidance.DistanceToViolation;
-        var currentPrefix = new ExecutionPrefixScore(prefixLength, prefixViolationDistance);
+        var currentPrefix = new ExecutionPrefix(prefixLength, prefixViolationDistance);
 
         if (ComparePrefixes(currentPrefix, _currentRunBestPrefix))
         {
@@ -129,7 +139,7 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
     /// <summary>
     /// Returns true if a is better than b, false otherwise.
     /// </summary>
-    private bool ComparePrefixes(ExecutionPrefixScore a, ExecutionPrefixScore b)
+    private bool ComparePrefixes(ExecutionPrefix a, ExecutionPrefix b)
     {
         if (a == null) return false;
         if (b == null) return true;
@@ -146,7 +156,7 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
     protected override SeedFeedback ComputeFeedback(TimelineObserver timeline, ScheduleTrace scheduleTrace)
     {
         VerifyReplayPrefix(scheduleTrace);
-        var (diversityScore, minHash) = _diversity.Measure(timeline);
+        var (diversityScore, minHash) = _diversity.NormalizedMeasure(timeline);
         bool newBestPrefix = ComparePrefixes(_currentRunBestPrefix, _bestPrefix);
 
         if (diversityScore == 0 && !newBestPrefix)
@@ -155,9 +165,9 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
         // diversityScore is based on entire execution, but length and violationDistance
         // are based on only the best execution prefix; is this an issue?
         var prefix = _currentRunBestPrefix;
-        int priority = prefix is not null
-            ? ComputePriority(diversityScore, prefix.Length, prefix.DistanceToViolation)
-            : diversityScore;
+        var nullableResult = ComputePriorityAndBudget(diversityScore, prefix);
+        if (nullableResult is not (double, int) result)
+            return null;
 
         // Save reconfigs necessary to reproduce this execution so mutation can 
         // preserve the prefix
@@ -166,9 +176,8 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
             Reconfigurations = _replayPlan.Reconfigurations.Slice(0, _nextReconfiguration)
         };
 
-        // TODO: Tune the mutation budget independently of priority.
         var feedback = new MonitorGuidedSeedFeedback(
-            priority, Math.Max(1, priority), CopyExecutionPrefix(scheduleTrace, prefix?.Length ?? 0), executedPlan);
+            result.Priority, result.MutationBudget, CopyExecutionPrefix(scheduleTrace, prefix?.Length ?? 0), executedPlan);
 
         if (newBestPrefix)
             _bestPrefix = _currentRunBestPrefix;
@@ -209,21 +218,53 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
         }
     }
 
-    private int ComputePriority(int diversityScore, int length, int violationDistance)
+    private (double Priority, int MutationBudget)? ComputePriorityAndBudget(double diversityScore, ExecutionPrefix prefix)
     {
+        // Null prefix is possible if execution has no monitor observations
+        if (prefix == null)
+            return (diversityScore, ComputeMutationBudget(diversityScore, 0.0));
+
+        int length = prefix.Length;
+        int violationDistance = prefix.DistanceToViolation;
+
+        if (length == 0)
+            throw new PInternalException("Recorded prefix of length 0");
+
+        // If violationDistance == 0, this run should've encountered a bug. Not 
+        // useful to discover same exact buggy execution multiple times, so discard
+        // this execution.
+        if (violationDistance == 0)
+            return null;
+
+        // Prefixes that consume entire step budget without reaching violation
+        // are discarded.
+        bool boundedSchedules = MaxScheduledSteps > 0;
+        if (boundedSchedules && length >= MaxScheduledSteps)
+            return null;
+
         // Prioritize high diversity, low length and violationDistance
-        // JR TODO: Placeholder priority computation
-        return length == 0 || violationDistance == 0
-            ? 0 : (int)(diversityScore / ((long)length * violationDistance));
+        double progress = 1.0 - (double)violationDistance / _initialGuidance.DistanceToViolation;
+        double remainingBudgetFraction = !boundedSchedules
+            ? 1.0 : 1.0 - (double)length / MaxScheduledSteps;
+        // Progress is more valuable than remaining budget; for example:
+        // p1: 0.9 progress, 0.1 remaining budget
+        // p2: 0.1 progress, 0.9 remaining budget
+        // p1 should be prioritized over p2
+        double monitorScore = (progress + progress * remainingBudgetFraction) / 2.0;
+        double priority = diversityScore + monitorScore;
+
+        return (priority, ComputeMutationBudget(diversityScore, monitorScore));
+    }
+
+    private int ComputeMutationBudget(double diversityScore, double monitorScore)
+    {
+        return (int)Math.Round(DefaultMutationBudget * (1.0 + diversityScore + monitorScore));
     }
 
     protected override StrategyGenerator MutateRecording(GeneratorRecord parent)
     {
         var feedback = (MonitorGuidedSeedFeedback)parent.Feedback;
         int boundary = feedback.ExecutionPrefix.Length;
-
-        // JR TODO: Prefixes that consume entire step budget but do not reach violation
-        // are not helpful and shouldn't be preserved
 
         // To preserve prefix, preserve parent reconfigs that occurred before prefix
         // boundary. Append new reconfig to allow exploration of new suffix.

@@ -47,6 +47,15 @@ internal sealed class TimelineDiversity
     }
 
     /// <summary>
+    /// Measures the timeline and scales its score to [0, 1].
+    /// </summary>
+    internal (double Score, IReadOnlyList<int> MinHash) NormalizedMeasure(TimelineObserver timeline)
+    {
+        var (score, minHash) = Measure(timeline);
+        return ((double)score / (NovelTimelineBonus + minHash.Count), minHash);
+    }
+
+    /// <summary>
     /// Includes the measured timeline in future comparisons after the policy admits its seed.
     /// </summary>
     internal void RecordAdmission(IReadOnlyList<int> minHash) => _admittedMinHashes.Add(minHash);
