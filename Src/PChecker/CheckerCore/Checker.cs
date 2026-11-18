@@ -6,7 +6,7 @@ using PChecker.IO.Debugging;
 using PChecker.IO.Logging;
 using PChecker.SystematicTesting;
 using PChecker.Testing;
-using PChecker.SystematicTesting.Strategies.MonitorGuided;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided;
 
 namespace PChecker;
 

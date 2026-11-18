@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Z3;
 using PChecker.Runtime.Values;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution;
 using Plang.Compiler.TypeChecker.Types;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solver
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution.Solver
 {
     internal partial class Z3Translator
     {

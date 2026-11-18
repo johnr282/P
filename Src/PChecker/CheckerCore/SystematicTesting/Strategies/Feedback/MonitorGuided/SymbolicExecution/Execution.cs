@@ -1,5 +1,5 @@
 ﻿using PChecker.Runtime.Exceptions;
-using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Continuations;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution.Continuations;
 using Plang.Compiler.TypeChecker.AST.Declarations;
 using Plang.Compiler.TypeChecker.AST.Expressions;
 using Plang.Compiler.TypeChecker.AST.Statements;
@@ -9,7 +9,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution
 {
     internal static class Execution
     {

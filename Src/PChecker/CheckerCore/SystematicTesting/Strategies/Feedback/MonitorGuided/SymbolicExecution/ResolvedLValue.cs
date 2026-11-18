@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution
 {
     /// <summary>
     /// Storage dictionaries in <see cref="SymState"/> that can hold a P variable.

@@ -11,6 +11,8 @@
     <StartupObject />
     <LangVersion>latest</LangVersion>
     <OutputPath>./</OutputPath>
+    <!-- Resolve the tool's runtime before copies left in the generated output. -->
+    <AssemblySearchPaths>{HintPathFromItem};$(AssemblySearchPaths)</AssemblySearchPaths>
   </PropertyGroup>
 -foreign-include-
   <ItemGroup>

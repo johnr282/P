@@ -6,13 +6,13 @@ using NUnit.Framework;
 using Plang.Compiler;
 using PChecker.Runtime.Values;
 using PChecker.Runtime.StateMachines;
-using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution;
-using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solver;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution.Solver;
 using Plang.Compiler.TypeChecker.AST.Declarations;
 using Plang.Compiler.TypeChecker.AST.Expressions;
 using Plang.Compiler.TypeChecker.Types;
-using NamedTupleExpr = PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.NamedTupleExpr;
+using NamedTupleExpr = PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution.NamedTupleExpr;
 using EnumDeclaration = Plang.Compiler.TypeChecker.AST.Declarations.PEnum;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution;
 
 namespace UnitTests
 {

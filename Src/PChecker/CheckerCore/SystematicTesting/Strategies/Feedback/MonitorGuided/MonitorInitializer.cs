@@ -1,6 +1,5 @@
 ﻿using PChecker.Configuration;
 using PChecker.IO.Debugging;
-using PChecker.SystematicTesting;
 using Plang.Compiler;
 using Plang.Compiler.TypeChecker.AST.Declarations;
 using System;
@@ -9,7 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
 {
     internal static class MonitorInitializer
     {

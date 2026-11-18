@@ -61,8 +61,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
             IReadOnlyList<ExecutionEffect> producedEffects,
             bool completeObservation);
 
-        void AttachStatistics(MonitorGuidedStatistics statistics);
-
         void SetMonitorObservedEvents(IReadOnlyList<ASTEvent> observedEvents);
 
         /// <summary>

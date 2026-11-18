@@ -6,12 +6,12 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Z3;
 using PChecker.IO.Debugging;
-using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using PChecker.Runtime.Values;
 using Plang.Compiler.TypeChecker.AST.Expressions;
 using Plang.Compiler.TypeChecker.Types;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solver
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution.Solver
 {
     internal sealed class Z3Solver : ISolver
     {

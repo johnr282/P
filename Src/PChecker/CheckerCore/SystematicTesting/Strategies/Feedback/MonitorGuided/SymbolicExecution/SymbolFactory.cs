@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution
 {
     internal class SymbolFactory
     {

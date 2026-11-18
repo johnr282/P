@@ -1,14 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.IO;
 using System.Linq;
 using PChecker.Configuration;
 using PChecker.Feedback;
 using PChecker.Generator.Object;
+using PChecker.IO.Debugging;
 using PChecker.Runtime.Exceptions;
 using PChecker.SystematicTesting.Operations;
-using PChecker.SystematicTesting.Strategies.MonitorGuided;
-using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solver;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution.Solver;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
 using PChecker.SystematicTesting.Traces;
 using Plang.Compiler.TypeChecker.AST.Declarations;
@@ -28,6 +29,10 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
     private ReplayPlan _replayPlan;
     private ImmutableArray<RecordedStep> _expectedPrefix = ImmutableArray<RecordedStep>.Empty;
     private int _nextReconfiguration;
+    private int? _parentViolationProgress;
+    private int? _guidanceInvalidationStep;
+
+    internal MonitorGuidedStatistics Statistics { get; } = new();
 
     private record ExecutionPrefix(int Length, int DistanceToViolation);
 
@@ -39,7 +44,8 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
     private sealed record ReplayPlan(int SchedulerSeed, int InputSeed, ImmutableArray<Reconfiguration> Reconfigurations);
 
     private sealed record MonitorGuidedSeedFeedback(
-        double Priority, int MutationBudget, ImmutableArray<RecordedStep> ExecutionPrefix, ReplayPlan ReplayPlan)
+        double Priority, int MutationBudget, ImmutableArray<RecordedStep> ExecutionPrefix, ReplayPlan ReplayPlan,
+        int ViolationProgress)
         : SeedFeedback(Priority, MutationBudget);
 
     private ExecutionPrefix _bestPrefix = null;
@@ -63,30 +69,58 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
         _replayPlan = new ReplayPlan(seed, seed, ImmutableArray<Reconfiguration>.Empty);
         _monitorAST = monitorAst ?? throw new ArgumentNullException(nameof(monitorAst));
         _monitorAnalyzer = new MonitorAnalyzer(_monitorAST);
-        MonitorGuidance guidance = null;
         switch (_monitorAST.Name)
         {
             case "OneLeaderPerElection":
-                _monitorAnalyzer.GetLeaderMonitorGuidance(out guidance);
+                _monitorAnalyzer.GetLeaderMonitorGuidance(out _initialGuidance);
                 break;
             case "Mutex":
-                _monitorAnalyzer.GetMutexMonitorGuidance(out guidance);
+                _monitorAnalyzer.GetMutexMonitorGuidance(out _initialGuidance);
                 break;
             default:
                 throw new PInternalException("Unsupported monitor");
         }
 
-        _initialGuidance = guidance;
-        _runGuidance = _initialGuidance?.Clone();
-        _solver = _initialGuidance is null ? null : new Z3Solver();
+        if (_initialGuidance == null)
+            throw new PInternalException("Failed to compute initial monitor guidance");
+
+        _runGuidance = _initialGuidance.Clone();
+        _solver = new Z3Solver(statistics: Statistics);
     }
 
     public override bool PrepareForNextIteration()
     {
         var hasNextIteration = base.PrepareForNextIteration();
-        _runGuidance = _initialGuidance?.Clone();
+        _runGuidance = _initialGuidance.Clone();
         _currentRunBestPrefix = null;
+        _guidanceInvalidationStep = null;
         return hasNextIteration;
+    }
+
+    private int CurrentViolationProgress => _currentRunBestPrefix is null
+        ? 0 : _initialGuidance.DistanceToViolation - _currentRunBestPrefix.DistanceToViolation;
+
+    protected override void OnExecutionCompleted()
+    {
+        int progress = CurrentViolationProgress;
+        Statistics.RecordExecution(progress > 0, guidanceInvalidationStep: _guidanceInvalidationStep);
+        if (_parentViolationProgress is int parentProgress)
+        {
+            Statistics.RecordChildPrefixProgress(Math.Max(0, progress - parentProgress));
+        }
+    }
+
+    protected override void OnRecordingSelectedForMutation(GeneratorRecord parent)
+    {
+        var feedback = (MonitorGuidedSeedFeedback)parent.Feedback;
+        _parentViolationProgress = feedback.ViolationProgress;
+        Statistics.RecordPrefixSelectedForMutation(feedback.ExecutionPrefix.Length, feedback.ViolationProgress > 0);
+    }
+
+    public override void DumpStats(TextWriter writer)
+    {
+        base.DumpStats(writer);
+        Statistics.WriteTo(writer);
     }
 
     public override void NotifyEffects(
@@ -120,8 +154,15 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
         }
 
         int previousDistance = _runGuidance.DistanceToViolation;
+        bool wasGuidanceValid = _runGuidance.Valid;
         _runGuidance.Update(observation.ObservedEvent, _solver);
-        if (_runGuidance.DistanceToViolation >= previousDistance)
+        if (wasGuidanceValid && !_runGuidance.Valid)
+        {
+            _guidanceInvalidationStep = observation.TracePosition;
+        }
+
+        if (_runGuidance.DistanceToViolation >= previousDistance ||
+            !_runGuidance.Valid)
         {
             return;
         }
@@ -132,6 +173,9 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
 
         if (ComparePrefixes(currentPrefix, _currentRunBestPrefix))
         {
+            Debug.WriteLine(
+                "<MonitorGuidedFeedbackStrategy> Updating _currentRunBestPrefix from {0} to {1} after event '{2}'.",
+                (object)_currentRunBestPrefix ?? "null", currentPrefix, observation.ObservedEvent);
             _currentRunBestPrefix = currentPrefix;
         }
     }
@@ -169,6 +213,10 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
         if (nullableResult is not (double, int) result)
             return null;
 
+        Debug.WriteLine(
+            "<MonitorGuidedFeedbackStrategy> Computed feedback for prefix {0}: priority={1}, mutation budget={2}.",
+            (object)prefix ?? "null", result.Priority, result.MutationBudget);
+
         // Save reconfigs necessary to reproduce this execution so mutation can 
         // preserve the prefix
         var executedPlan = _replayPlan with
@@ -177,12 +225,19 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
         };
 
         var feedback = new MonitorGuidedSeedFeedback(
-            result.Priority, result.MutationBudget, CopyExecutionPrefix(scheduleTrace, prefix?.Length ?? 0), executedPlan);
+            result.Priority, result.MutationBudget, CopyExecutionPrefix(scheduleTrace, prefix?.Length ?? 0), executedPlan,
+            CurrentViolationProgress);
 
         if (newBestPrefix)
+        {
+            Debug.WriteLine(
+                "<MonitorGuidedFeedbackStrategy> Updating _bestPrefix from {0} to {1}.",
+                (object)_bestPrefix ?? "null", _currentRunBestPrefix);
             _bestPrefix = _currentRunBestPrefix;
+        }
 
         _diversity.RecordAdmission(minHash);
+        Statistics.RecordPrefixAdmission(diversityScore > 0, newBestPrefix, isRoot: _parentViolationProgress is null);
 
         return feedback;
     }
@@ -244,6 +299,8 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
 
         // Prioritize high diversity, low length and violationDistance
         double progress = 1.0 - (double)violationDistance / _initialGuidance.DistanceToViolation;
+
+        // JR TODO: Even with unbounded schedules, still want to prioritize shorter prefixes
         double remainingBudgetFraction = !boundedSchedules
             ? 1.0 : 1.0 - (double)length / MaxScheduledSteps;
         // Progress is more valuable than remaining budget; for example:
@@ -266,6 +323,10 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
         var feedback = (MonitorGuidedSeedFeedback)parent.Feedback;
         int boundary = feedback.ExecutionPrefix.Length;
 
+        Debug.WriteLine(
+            "<MonitorGuidedFeedbackStrategy> Chose prefix for mutation: length={0}, priority={1}, mutation budget={2}.",
+            boundary, feedback.Priority, feedback.MutationBudget);
+
         // To preserve prefix, preserve parent reconfigs that occurred before prefix
         // boundary. Append new reconfig to allow exploration of new suffix.
         var reconfigurations = feedback.ReplayPlan.Reconfigurations
@@ -276,9 +337,12 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
             feedback.ExecutionPrefix);
     }
 
-    protected override StrategyGenerator CreateFreshGenerator(StrategyGenerator current) =>
-        StartRecording(new ReplayPlan(_seedGenerator.Next(), _seedGenerator.Next(), ImmutableArray<Reconfiguration>.Empty),
+    protected override StrategyGenerator CreateFreshGenerator(StrategyGenerator current)
+    {
+        _parentViolationProgress = null;
+        return StartRecording(new ReplayPlan(_seedGenerator.Next(), _seedGenerator.Next(), ImmutableArray<Reconfiguration>.Empty),
             ImmutableArray<RecordedStep>.Empty);
+    }
 
     protected override StrategyGenerator BeforeChoice(StrategyGenerator current)
     {

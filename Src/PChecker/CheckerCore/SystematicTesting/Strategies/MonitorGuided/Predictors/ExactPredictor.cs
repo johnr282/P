@@ -1,6 +1,5 @@
 ﻿using PChecker.Runtime.StateMachines;
 using PChecker.SystematicTesting.Operations;
-using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using Plang.Compiler.TypeChecker.AST.Declarations;
 using System;
 using System.Collections.Generic;
@@ -24,13 +23,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
         private readonly HashSet<BehaviorStore.BehaviorNode>
             _monitorObservedBehaviors = new();
 
-        private MonitorGuidedStatistics _statistics;
         private IReadOnlyList<ASTEvent> _observedEventTypes;
-
-        internal ExactPredictor(MonitorGuidedStatistics statistics = null)
-            => _statistics = statistics;
-        public void AttachStatistics(MonitorGuidedStatistics statistics)
-            => _statistics = statistics;
 
         public void SetMonitorObservedEvents(IReadOnlyList<ASTEvent> observedEvents)
             => _observedEventTypes = observedEvents;
@@ -81,17 +74,11 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
                 completeObservation,
                 out var behaviorNode,
                 out bool behaviorChanged,
-                out bool matchedExistingBehavior);
+                out _);
 
             if (!behaviorAccepted)
             {
-                _statistics?.RecordInconsistentBehavior();
                 return;
-            }
-
-            if (matchedExistingBehavior)
-            {
-                _statistics?.RecordConsistentBehavior();
             }
 
             if (!behaviorChanged) return;

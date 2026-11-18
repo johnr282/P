@@ -1,4 +1,4 @@
-﻿using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Continuations;
+﻿using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution.Continuations;
 using Plang.Compiler.TypeChecker.AST;
 using System;
 using System.Collections.Generic;
@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution
 {
     /// <summary>
     /// Represents the current in-progress work of the symbolic executor and its

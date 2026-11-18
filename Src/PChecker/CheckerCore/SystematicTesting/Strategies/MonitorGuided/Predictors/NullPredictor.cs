@@ -20,8 +20,6 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided.Predictors
         public IReadOnlySet<BehaviorStore.BehaviorNode>
             MonitorObservedBehaviors => EmptyMonitorObservedBehaviors;
 
-        public void AttachStatistics(MonitorGuidedStatistics statistics) { }
-
         public void SetMonitorObservedEvents(IReadOnlyList<ASTEvent> observedEvents) { }
 
         /// <inheritdoc/>

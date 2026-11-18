@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using PChecker.Configuration;
 using PChecker.IO.Debugging;
 using PChecker.SystematicTesting;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided;
 using PChecker.Utilities;
 
 namespace PChecker.Testing
@@ -203,13 +204,28 @@ namespace PChecker.Testing
                 Reporter.EmitTestingCoverageReport(testReport);
             }
 
-            Console.WriteLine(testReport.GetText(_checkerConfiguration, "..."));
+            Console.WriteLine(TestingEngine.GetReport());
             
             var file = Path.GetFileNameWithoutExtension(testReport.CheckerConfiguration.AssemblyToBeAnalyzed);
             var directory = testReport.CheckerConfiguration.OutputDirectory;
             var pintPath = directory + file + "_pchecker_summary.txt";
             Console.WriteLine($"..... Writing {pintPath}");
             File.WriteAllText(pintPath, testReport.GetSummaryText(Profiler));
+
+            if (TestingEngine.Strategy is MonitorGuidedFeedbackStrategy monitorGuidedFeedback)
+            {
+                var statisticsFile = file;
+                if (!string.IsNullOrEmpty(_checkerConfiguration.TestCaseName))
+                {
+                    statisticsFile += "_" + _checkerConfiguration.TestCaseName;
+                }
+
+                statisticsFile += "_" + _checkerConfiguration.TestingProcessId + "_monitor_guided_statistics.txt";
+                var statisticsPath = Path.Combine(directory, statisticsFile);
+                Console.WriteLine($"..... Writing {statisticsPath}");
+                using var statisticsWriter = new StreamWriter(statisticsPath);
+                monitorGuidedFeedback.DumpStats(statisticsWriter);
+            }
 
             Console.WriteLine($"... Elapsed {Profiler.GetElapsedTime()} sec.");
 

@@ -112,6 +112,8 @@ namespace Plang.Options
             var modes = basicOptions.AddArgument("mode", "md", "Checker mode to use. Can be bugfinding or pex. If this option is not passed, bugfinding mode is used as default");
             modes.AllowedValues = CheckerModes.ToList();
             basicOptions.AddArgument("testcase", "tc", "Test case to explore");
+            basicOptions.AddArgument("pproj", "pp",
+                "P project file (*.pproj) used to locate compiled output and analyze monitors");
             // basicOptions.AddArgument("smoke-testing", "tsmoke",
             //     "Smoke test the program by running the checker on all the test cases", typeof(bool));
             basicOptions.AddArgument("list-tests", null, "List all test cases and exit.", typeof(bool));

@@ -9,7 +9,7 @@ using Plang.Compiler.TypeChecker.AST.Declarations;
 using Plang.Compiler.TypeChecker.AST.Expressions;
 using Plang.Compiler.TypeChecker.Types;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution
 {
     internal abstract record SymExpr(PLanguageType Type);
 

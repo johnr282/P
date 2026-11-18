@@ -1,8 +1,7 @@
 ﻿using Microsoft.Z3;
 using PChecker.Runtime.Events;
-using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided;
-using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution;
-using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solver;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution.Solver;
 using Plang.Compiler.TypeChecker.AST.States;
 using System;
 using System.Collections.Generic;
@@ -11,7 +10,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
 {
     internal class MonitorGuidance
     {
@@ -88,7 +87,7 @@ namespace PChecker.SystematicTesting.Strategies.MonitorGuided
                 violatingExecution,
                 SymExprFactory.CloneSymExpr(_violationCondition))
             {
-                _guidanceIndex = this._guidanceIndex
+                _guidanceIndex = _guidanceIndex
             };
         }
     }

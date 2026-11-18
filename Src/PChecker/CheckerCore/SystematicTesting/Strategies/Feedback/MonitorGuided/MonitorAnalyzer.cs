@@ -1,7 +1,6 @@
 ﻿using PChecker.Runtime.Events;
 using PChecker.Runtime.Exceptions;
-using PChecker.SystematicTesting.Strategies.MonitorGuided;
-using PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution;
 using Plang.Compiler.TypeChecker.AST.Declarations;
 using Plang.Compiler.TypeChecker.AST.States;
 using Plang.Compiler.TypeChecker.Types;

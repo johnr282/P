@@ -121,6 +121,7 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     public void ObserveRunningResults(TimelineObserver timelineObserver, ScheduleTrace scheduleTrace)
     {
         var feedback = ComputeFeedback(timelineObserver, scheduleTrace);
+        OnExecutionCompleted();
         if (feedback is null)
         {
             return;
@@ -193,11 +194,27 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
             }
         }
 
-        _generator = _shouldExploreNew
-            ? CreateFreshGenerator(_generator)
-            : MutateRecording(_currentParent);
+        if (_shouldExploreNew)
+        {
+            _generator = CreateFreshGenerator(_generator);
+        }
+        else
+        {
+            _generator = MutateRecording(_currentParent);
+            OnRecordingSelectedForMutation(_currentParent);
+        }
         _pendingMutations -= 1;
     }
+
+    /// <summary>
+    /// Called after a completed execution is evaluated, including discarded recordings.
+    /// </summary>
+    protected virtual void OnExecutionCompleted() { }
+
+    /// <summary>
+    /// Called for each mutation of a saved recording, including repeated selections.
+    /// </summary>
+    protected virtual void OnRecordingSelectedForMutation(GeneratorRecord parent) { }
 
     /// <summary>
     /// Returns feedback for an admitted recording, or null to discard it.
@@ -215,7 +232,7 @@ internal abstract class FeedbackGuidedStrategy : IFeedbackGuidedStrategy
     protected virtual StrategyGenerator CreateFreshGenerator(StrategyGenerator current) =>
         new(current.InputGenerator.New(), current.Scheduler.New());
 
-    public void DumpStats(TextWriter writer)
+    public virtual void DumpStats(TextWriter writer)
     {
         writer.WriteLine($"..... Total saved: {TotalSavedInputs()}, pending mutations: {_pendingMutations}, visited generators: {_visitedGenerators.Count}");
     }

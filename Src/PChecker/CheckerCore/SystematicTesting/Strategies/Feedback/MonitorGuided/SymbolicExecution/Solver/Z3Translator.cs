@@ -5,8 +5,9 @@ using Microsoft.Z3;
 using PChecker.Runtime.Values;
 using Plang.Compiler.TypeChecker.Types;
 using Plang.Compiler.TypeChecker.AST.Expressions;
+using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solver
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution.Solver
 {
     internal partial class Z3Translator
     {

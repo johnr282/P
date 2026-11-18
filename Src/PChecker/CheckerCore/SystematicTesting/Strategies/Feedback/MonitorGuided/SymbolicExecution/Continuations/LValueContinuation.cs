@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Continuations
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution.Continuations
 {
     /// <summary>
     /// Continuation for after an lvalue is resolved.

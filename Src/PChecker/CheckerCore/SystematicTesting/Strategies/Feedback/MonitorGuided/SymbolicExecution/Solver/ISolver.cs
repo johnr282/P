@@ -1,10 +1,11 @@
-﻿using System;
+﻿using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Solver
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution.Solver
 {
     internal interface ISolver
     {

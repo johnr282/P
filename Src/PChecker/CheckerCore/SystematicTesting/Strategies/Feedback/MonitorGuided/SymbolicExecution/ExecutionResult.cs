@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using static PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution.Execution;
+using static PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution.Execution;
 
-namespace PChecker.SystematicTesting.Strategies.MonitorGuided.SymbolicExecution
+namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided.SymbolicExecution
 {
     internal abstract record ExecutionResult;
 

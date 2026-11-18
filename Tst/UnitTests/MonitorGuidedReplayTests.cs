@@ -59,7 +59,211 @@ public class MonitorGuidedReplayTests
         seeds.Next();
         Assert.That(grandchild[5].IntegerChoice, Is.EqualTo(new Random(seeds.Next()).Next()));
         Assert.DoesNotThrow(() => strategy.ObserveRunningResults(timeline, grandchild));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(strategy.Statistics.TotalExecutions, Is.EqualTo(initialMutationBudget + 2));
+            Assert.That(strategy.Statistics.ExecutionsWithViolationProgress, Is.EqualTo(2));
+            Assert.That(strategy.Statistics.ExecutionViolationProgressRate,
+                Is.EqualTo(2.0 / (initialMutationBudget + 2)));
+            Assert.That(strategy.Statistics.TotalPrefixesSelectedForMutation, Is.EqualTo(initialMutationBudget + 1));
+            Assert.That(strategy.Statistics.PrefixesWithViolationProgressSelectedForMutation, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.SelectedPrefixViolationProgressRate,
+                Is.EqualTo(1.0 / (initialMutationBudget + 1)));
+            Assert.That(strategy.Statistics.MinSelectedPrefixLength, Is.Zero);
+            Assert.That(strategy.Statistics.MaxSelectedPrefixLength, Is.EqualTo(5));
+            Assert.That(strategy.Statistics.MeanSelectedPrefixLength, Is.EqualTo(5.0 / (initialMutationBudget + 1)));
+            Assert.That(strategy.Statistics.MedianSelectedPrefixLength, Is.Zero);
+            Assert.That(strategy.Statistics.SolverCacheMisses, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.SolverCacheHits, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.UniqueSolverFormulas, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.TotalChildPrefixes, Is.EqualTo(initialMutationBudget + 1));
+            Assert.That(strategy.Statistics.ChildPrefixesWithProgressImprovement, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.ChildPrefixProgressImprovementRate,
+                Is.EqualTo(1.0 / (initialMutationBudget + 1)));
+            Assert.That(strategy.Statistics.MinChildPrefixProgressImprovement, Is.Zero);
+            Assert.That(strategy.Statistics.MaxChildPrefixProgressImprovement, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.MeanChildPrefixProgressImprovement,
+                Is.EqualTo(1.0 / (initialMutationBudget + 1)));
+            Assert.That(strategy.Statistics.MedianChildPrefixProgressImprovement, Is.Zero);
+            Assert.That(strategy.Statistics.TotalAdmittedPrefixes, Is.EqualTo(strategy.TotalSavedInputs()));
+            Assert.That(strategy.Statistics.PrefixesAdmittedForDiversityOnly, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.PrefixesAdmittedForProgressOnly, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.PrefixesAdmittedForDiversityAndProgress, Is.Zero);
+            Assert.That(strategy.Statistics.RootPrefixes, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.ExecutionsInvalidatingGuidance, Is.Zero);
+        });
     }
+
+    [Test]
+    public void DiscardedViolatingExecutionStillCountsAsProgress()
+    {
+        var configuration = CheckerConfiguration.Create().WithRandomGeneratorSeed(17);
+        var strategy = new MonitorGuidedFeedbackStrategy(configuration, CreateMonitorAst());
+        var trace = Run(strategy, observeLeader: true);
+        Observe(strategy, new RunTaskChoice(0), trace.Count, 8);
+        strategy.ObserveRunningResults(new TimelineObserver(), trace);
+        strategy.PrepareForNextIteration();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(strategy.TotalSavedInputs(), Is.Zero);
+            Assert.That(strategy.Statistics.TotalExecutions, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.ExecutionsWithViolationProgress, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.ExecutionViolationProgressRate, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.TotalPrefixesSelectedForMutation, Is.Zero);
+            Assert.That(strategy.Statistics.SolverCacheMisses, Is.EqualTo(2));
+            Assert.That(strategy.Statistics.UniqueSolverFormulas, Is.EqualTo(2));
+            Assert.That(strategy.Statistics.TotalChildPrefixes, Is.Zero);
+            Assert.That(strategy.Statistics.TotalAdmittedPrefixes, Is.Zero);
+            Assert.That(strategy.Statistics.RootPrefixes, Is.Zero);
+            Assert.That(strategy.Statistics.ExecutionsInvalidatingGuidance, Is.Zero);
+        });
+    }
+
+    [Test]
+    public void PrefixAtStepBoundStillCountsAsExecutionProgressWhenDiscarded()
+    {
+        var configuration = CheckerConfiguration.Create().WithRandomGeneratorSeed(17).WithMaxUnfairSchedulingSteps(5);
+        var strategy = new MonitorGuidedFeedbackStrategy(configuration, CreateMonitorAst());
+        var trace = Run(strategy, observeLeader: true);
+        strategy.ObserveRunningResults(new TimelineObserver(), trace);
+
+        Assert.That(strategy.TotalSavedInputs(), Is.Zero);
+        Assert.That(strategy.Statistics.TotalExecutions, Is.EqualTo(1));
+        Assert.That(strategy.Statistics.ExecutionsWithViolationProgress, Is.EqualTo(1));
+        Assert.That(strategy.Statistics.TotalAdmittedPrefixes, Is.Zero);
+    }
+
+    [Test]
+    public void ViolatingChildImprovesBeyondParentEvenThoughItIsDiscarded()
+    {
+        var configuration = CheckerConfiguration.Create().WithRandomGeneratorSeed(17);
+        var strategy = new MonitorGuidedFeedbackStrategy(configuration, CreateMonitorAst());
+        var timeline = new TimelineObserver();
+        strategy.ObserveRunningResults(timeline, Run(strategy, observeLeader: true));
+        strategy.PrepareForNextIteration();
+
+        var child = Run(strategy, observeLeader: true);
+        Observe(strategy, new RunTaskChoice(0), child.Count, 8);
+        strategy.ObserveRunningResults(timeline, child);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(strategy.Statistics.TotalChildPrefixes, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.ChildPrefixesWithProgressImprovement, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.ChildPrefixProgressImprovementRate, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.MinChildPrefixProgressImprovement, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.MaxChildPrefixProgressImprovement, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.MeanChildPrefixProgressImprovement, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.MedianChildPrefixProgressImprovement, Is.EqualTo(1));
+            Assert.That(strategy.TotalSavedInputs(), Is.EqualTo(1));
+            Assert.That(strategy.Statistics.TotalAdmittedPrefixes, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.PrefixesAdmittedForDiversityAndProgress, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.DiversityAndProgressAdmissionRate, Is.EqualTo(1));
+        });
+    }
+
+    [Test]
+    public void AdmissionsUseNoveltyAndGlobalBestRatherThanJustNonzeroProgress()
+    {
+        var configuration = CheckerConfiguration.Create().WithRandomGeneratorSeed(17);
+        var strategy = new MonitorGuidedFeedbackStrategy(configuration, CreateMonitorAst());
+        var timeline = new TimelineObserver();
+        strategy.ObserveRunningResults(timeline, Run(strategy, observeLeader: false));
+        strategy.PrepareForNextIteration();
+        strategy.ObserveRunningResults(timeline, Run(strategy, observeLeader: true));
+        strategy.PrepareForNextIteration();
+        strategy.ObserveRunningResults(timeline, Run(strategy, observeLeader: true));
+        Assert.That(strategy.Statistics.TotalAdmittedPrefixes, Is.EqualTo(2));
+
+        var novelTimeline = new TimelineObserver();
+        var machine = new PChecker.Runtime.StateMachines.StateMachineId(typeof(MonitorGuidedReplayTests),
+            "test", null, null, useNameForHashing: true);
+        novelTimeline.OnDequeueEvent(machine, "state", PChecker.Runtime.Events.DefaultEvent.Instance);
+        novelTimeline.OnDequeueEvent(machine, "state", PChecker.Runtime.Events.DefaultEvent.Instance);
+        strategy.PrepareForNextIteration();
+        strategy.ObserveRunningResults(novelTimeline, Run(strategy, observeLeader: true));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(strategy.Statistics.TotalAdmittedPrefixes, Is.EqualTo(strategy.TotalSavedInputs()));
+            Assert.That(strategy.Statistics.TotalAdmittedPrefixes, Is.EqualTo(3));
+            Assert.That(strategy.Statistics.PrefixesAdmittedForDiversityOnly, Is.EqualTo(2));
+            Assert.That(strategy.Statistics.PrefixesAdmittedForProgressOnly, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.PrefixesAdmittedForDiversityAndProgress, Is.Zero);
+            Assert.That(strategy.Statistics.DiversityOnlyAdmissionRate, Is.EqualTo(2.0 / 3));
+            Assert.That(strategy.Statistics.ProgressOnlyAdmissionRate, Is.EqualTo(1.0 / 3));
+            Assert.That(strategy.Statistics.TotalChildPrefixes, Is.EqualTo(3));
+            Assert.That(strategy.Statistics.ChildPrefixesWithProgressImprovement, Is.EqualTo(3));
+        });
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public void GuidanceInvalidationCountsOncePerExecutionAndResetsForNextRun(bool makeProgress)
+    {
+        var configuration = CheckerConfiguration.Create().WithRandomGeneratorSeed(17);
+        var strategy = new MonitorGuidedFeedbackStrategy(configuration, CreateMonitorAst());
+        var timeline = new TimelineObserver();
+        var trace = Run(strategy, observeLeader: makeProgress);
+        var choice = new RunTaskChoice(0);
+        for (int i = 0; i < 3; i++)
+        {
+            strategy.NotifyEffects(choice,
+                [new MonitorObservationEffect(null, new eOtherLeader(7), false, "OneLeaderPerElection",
+                    i == 0 ? trace.Count - 1 : trace.Count)], true);
+        }
+        Observe(strategy, choice, trace.Count, 8);
+        strategy.ObserveRunningResults(timeline, trace);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(strategy.Statistics.TotalExecutions, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.ExecutionsInvalidatingGuidance, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.MinGuidanceInvalidationStep, Is.EqualTo(trace.Count - 1));
+            Assert.That(strategy.Statistics.MaxGuidanceInvalidationStep, Is.EqualTo(trace.Count - 1));
+            Assert.That(strategy.Statistics.MeanGuidanceInvalidationStep, Is.EqualTo(trace.Count - 1));
+            Assert.That(strategy.Statistics.MedianGuidanceInvalidationStep, Is.EqualTo(trace.Count - 1));
+            Assert.That(strategy.Statistics.ExecutionsWithViolationProgress, Is.EqualTo(makeProgress ? 1 : 0));
+            Assert.That(strategy.Statistics.RootPrefixes, Is.EqualTo(1));
+        });
+
+        strategy.PrepareForNextIteration();
+        strategy.ObserveRunningResults(timeline, Run(strategy, observeLeader: makeProgress));
+        Assert.That(strategy.Statistics.TotalExecutions, Is.EqualTo(2));
+        Assert.That(strategy.Statistics.ExecutionsInvalidatingGuidance, Is.EqualTo(1));
+        Assert.That(strategy.Statistics.MeanGuidanceInvalidationStep, Is.EqualTo(trace.Count - 1));
+        Assert.That(strategy.Statistics.MedianGuidanceInvalidationStep, Is.EqualTo(trace.Count - 1));
+        Assert.That(strategy.Statistics.RootPrefixes, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void FinalCheckerReportIncludesFeedbackStatisticsOnSeparateLines()
+    {
+        var configuration = CheckerConfiguration.Create().WithRandomGeneratorSeed(17);
+        configuration.SchedulingStrategy = StrategyType.MonitorGuidedFeedback;
+        configuration.MonitorASTs = new[] { CreateMonitorAst() };
+        var engine = PChecker.SystematicTesting.TestingEngine.Create(configuration, (Action)FeedbackReportTest);
+        var strategy = (MonitorGuidedFeedbackStrategy)engine.Strategy;
+        strategy.ObserveRunningResults(new TimelineObserver(), Run(strategy, observeLeader: true));
+        strategy.PrepareForNextIteration();
+
+        var report = engine.GetReport();
+        Assert.That(report, Does.Contain(Environment.NewLine + "..... Total saved: 1"));
+        Assert.That(report, Does.Contain(Environment.NewLine + "..... Executions with non-zero violation progress: 1/1"));
+        Assert.That(report, Does.Contain(Environment.NewLine + "..... Prefixes selected for mutation: 1"));
+        Assert.That(report, Does.Contain(Environment.NewLine + "..... Selected prefix length: min=5, max=5"));
+        Assert.That(report, Does.Contain(Environment.NewLine + "..... Solver cache: hits=0, misses=1"));
+        Assert.That(report, Does.Contain(Environment.NewLine + "..... Child prefixes improving on their parent: 0/0"));
+        Assert.That(report, Does.Contain(Environment.NewLine + "..... Child prefix progress improvement (violation-distance reduction): min=0"));
+        Assert.That(report, Does.Contain(Environment.NewLine + "..... Admitted prefixes: 1; diversity only=0"));
+        Assert.That(report, Does.Contain(Environment.NewLine + "..... Executions invalidating guidance: 0"));
+        Assert.That(report, Does.Contain(Environment.NewLine + "..... Root prefixes: 1"));
+    }
+
+    [PChecker.SystematicTesting.Test(new[] { "OneLeaderPerElection" })]
+    private static void FeedbackReportTest() { }
 
     private static ScheduleTrace Run(MonitorGuidedFeedbackStrategy strategy, bool observeLeader)
     {
@@ -116,4 +320,6 @@ public class MonitorGuidedReplayTests
     }
 
     private sealed class eLeaderChosen(int leader) : RuntimeEvent(new PNamedTuple(["leader"], new PInt(leader)));
+
+    private sealed class eOtherLeader(int leader) : RuntimeEvent(new PNamedTuple(["leader"], new PInt(leader)));
 }

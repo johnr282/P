@@ -31,7 +31,6 @@ using PChecker.SystematicTesting.Strategies.Feedback;
 using PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided;
 using PChecker.SystematicTesting.Strategies.Probabilistic;
 using PChecker.SystematicTesting.Strategies.Special;
-using PChecker.SystematicTesting.Strategies.MonitorGuided;
 using PChecker.SystematicTesting.Traces;
 using PChecker.Utilities;
 using Debug = PChecker.IO.Debugging.Debug;
@@ -681,7 +680,15 @@ namespace PChecker.SystematicTesting
                 return report.ToString();
             }
 
-            return TestReport.GetText(_checkerConfiguration, "...");
+            using var writer = new StringWriter();
+            writer.Write(TestReport.GetText(_checkerConfiguration, "..."));
+            if (Strategy is IFeedbackGuidedStrategy feedbackStrategy)
+            {
+                writer.WriteLine();
+                feedbackStrategy.DumpStats(writer);
+            }
+
+            return writer.ToString();
         }
 
         /// <summary>
