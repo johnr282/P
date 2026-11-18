@@ -9,10 +9,13 @@ namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
     internal sealed class MonitorGuidedStatistics
     {
         private readonly HashSet<string> _solverFormulas = new(StringComparer.Ordinal);
+        private readonly HashSet<long> _exploredRootPrefixIds = new();
         private readonly SortedDictionary<int, long> _selectedPrefixLengths = new();
+        private readonly SortedDictionary<int, long> _preservedPrefixLengths = new();
         private readonly SortedDictionary<int, long> _childProgressImprovements = new();
         private readonly SortedDictionary<int, long> _guidanceInvalidationSteps = new();
         private long _selectedPrefixLengthSum;
+        private long _preservedPrefixLengthSum;
         private long _childProgressImprovementSum;
         private long _guidanceInvalidationStepSum;
 
@@ -44,6 +47,12 @@ namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
             ? 0
             : (double)_selectedPrefixLengthSum / TotalPrefixesSelectedForMutation;
         public double MedianSelectedPrefixLength => GetMedian(_selectedPrefixLengths, TotalPrefixesSelectedForMutation);
+        public int MinPreservedPrefixLength { get; private set; }
+        public int MaxPreservedPrefixLength { get; private set; }
+        public double MeanPreservedPrefixLength => TotalPrefixesSelectedForMutation == 0
+            ? 0
+            : (double)_preservedPrefixLengthSum / TotalPrefixesSelectedForMutation;
+        public double MedianPreservedPrefixLength => GetMedian(_preservedPrefixLengths, TotalPrefixesSelectedForMutation);
 
         public long TotalChildPrefixes { get; private set; }
         public long ChildPrefixesWithProgressImprovement { get; private set; }
@@ -61,6 +70,7 @@ namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
         public long PrefixesAdmittedForProgressOnly { get; private set; }
         public long PrefixesAdmittedForDiversityAndProgress { get; private set; }
         public long RootPrefixes { get; private set; }
+        public long RootPrefixesExplored => _exploredRootPrefixIds.Count;
         public long TotalAdmittedPrefixes => PrefixesAdmittedForDiversityOnly +
             PrefixesAdmittedForProgressOnly + PrefixesAdmittedForDiversityAndProgress;
         public double DiversityOnlyAdmissionRate => TotalAdmittedPrefixes == 0
@@ -118,9 +128,10 @@ namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
             }
         }
 
-        public void RecordPrefixSelectedForMutation(int length, bool hasViolationProgress)
+        public void RecordPrefixSelectedForMutation(int length, bool hasViolationProgress, int preservedLength)
         {
             ArgumentOutOfRangeException.ThrowIfNegative(length);
+            ArgumentOutOfRangeException.ThrowIfNegative(preservedLength);
 
             MinSelectedPrefixLength = TotalPrefixesSelectedForMutation == 0
                 ? length : Math.Min(MinSelectedPrefixLength, length);
@@ -128,6 +139,14 @@ namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
             _selectedPrefixLengthSum += length;
             _selectedPrefixLengths.TryGetValue(length, out long frequency);
             _selectedPrefixLengths[length] = frequency + 1;
+
+            MinPreservedPrefixLength = TotalPrefixesSelectedForMutation == 0
+                ? preservedLength : Math.Min(MinPreservedPrefixLength, preservedLength);
+            MaxPreservedPrefixLength = Math.Max(MaxPreservedPrefixLength, preservedLength);
+            _preservedPrefixLengthSum += preservedLength;
+            _preservedPrefixLengths.TryGetValue(preservedLength, out long preservedFrequency);
+            _preservedPrefixLengths[preservedLength] = preservedFrequency + 1;
+
             TotalPrefixesSelectedForMutation++;
             if (hasViolationProgress) PrefixesWithViolationProgressSelectedForMutation++;
         }
@@ -163,6 +182,8 @@ namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
             if (isRoot) RootPrefixes++;
         }
 
+        public void RecordRootPrefixExplored(long rootPrefixId) => _exploredRootPrefixIds.Add(rootPrefixId);
+
         public void WriteTo(TextWriter writer)
         {
             writer.WriteLine(string.Format(CultureInfo.InvariantCulture,
@@ -182,6 +203,9 @@ namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
                 "..... Selected prefix length: min={0}, max={1}, mean={2:F2}, median={3:F2}",
                 MinSelectedPrefixLength, MaxSelectedPrefixLength, MeanSelectedPrefixLength, MedianSelectedPrefixLength));
             writer.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                "..... Preserved prefix length: min={0}, max={1}, mean={2:F2}, median={3:F2}",
+                MinPreservedPrefixLength, MaxPreservedPrefixLength, MeanPreservedPrefixLength, MedianPreservedPrefixLength));
+            writer.WriteLine(string.Format(CultureInfo.InvariantCulture,
                 "..... Child prefixes improving on their parent: {0}/{1} ({2:P2})",
                 ChildPrefixesWithProgressImprovement, TotalChildPrefixes, ChildPrefixProgressImprovementRate));
             writer.WriteLine(string.Format(CultureInfo.InvariantCulture,
@@ -195,6 +219,8 @@ namespace PChecker.SystematicTesting.Strategies.Feedback.MonitorGuided
                 PrefixesAdmittedForDiversityAndProgress, DiversityAndProgressAdmissionRate));
             writer.WriteLine(string.Format(CultureInfo.InvariantCulture,
                 "..... Root prefixes: {0}", RootPrefixes));
+            writer.WriteLine(string.Format(CultureInfo.InvariantCulture,
+                "..... Root prefixes explored by mutation: {0}/{1}", RootPrefixesExplored, RootPrefixes));
             writer.WriteLine(string.Format(CultureInfo.InvariantCulture,
                 "..... Solver cache: hits={0}, misses={1}, hit rate={2:P2}, unique formulas={3}",
                 SolverCacheHits, SolverCacheMisses, SolverCacheHitRate, UniqueSolverFormulas));

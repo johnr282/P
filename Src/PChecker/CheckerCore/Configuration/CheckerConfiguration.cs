@@ -95,6 +95,9 @@ namespace PChecker.Configuration
         [IgnoreDataMember]
         public bool IsMonitorGuidedPredictorSpecified { get; set; }
 
+        [DataMember]
+        public MonitorGuidedFeedbackBoundaryMode MonitorGuidedFeedbackBoundary { get; set; }
+
         /// <summary>
         /// Number of testing schedules.
         /// </summary>
@@ -337,6 +340,7 @@ namespace PChecker.Configuration
             InboxType = InboxType.EventQueue;
             SchedulingStrategy = StrategyType.Random;
             MonitorGuidedPredictor = MonitorGuidedPredictorType.Exact;
+            MonitorGuidedFeedbackBoundary = MonitorGuidedFeedbackBoundaryMode.RandomExecution;
             TestingIterations = 1;
             RandomGeneratorSeed = null;
             IncrementalSchedulingSeed = false;

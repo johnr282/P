@@ -23,6 +23,16 @@ namespace Plang.Options
 
         internal static readonly string[] MonitorGuidedPredictors = { "exact", "null" };
 
+        private const string MonitorGuidedFeedbackBoundaryOption = "sch-monitorguidedfeedback-boundary";
+
+        private static readonly IReadOnlyDictionary<string, MonitorGuidedFeedbackBoundaryMode> MonitorGuidedFeedbackBoundaries =
+            new Dictionary<string, MonitorGuidedFeedbackBoundaryMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["best-prefix"] = MonitorGuidedFeedbackBoundaryMode.BestPrefix,
+                ["random-best-prefix"] = MonitorGuidedFeedbackBoundaryMode.RandomBestPrefix,
+                ["random-execution"] = MonitorGuidedFeedbackBoundaryMode.RandomExecution
+            };
+
         internal static MonitorGuidedPredictorType ParseMonitorGuidedPredictor(string predictor)
         {
             switch (predictor.ToLowerInvariant())
@@ -149,6 +159,10 @@ namespace Plang.Options
             schedulingGroup.AddArgument("sch-monitorguided", null, "Choose the random scheduling strategy with monitor guidance", typeof(bool));
             schedulingGroup.AddArgument("sch-monitorguidedfeedback", null,
                 "Choose monitor-guided feedback scheduling for a P test with one monitor", typeof(bool));
+            schedulingGroup.AddArgument(MonitorGuidedFeedbackBoundaryOption, null,
+                "Choose the mutation boundary for --sch-monitorguidedfeedback " +
+                "(best-prefix, random-best-prefix, or random-execution; default: random-execution)")
+                .AllowedValues = MonitorGuidedFeedbackBoundaries.Keys.ToList();
 
             var predictors = schedulingGroup.AddArgument("sch-monitorguided-predictor", null,
                 "Choose the monitor-guided predictor (exact or null; default: exact)");
@@ -195,6 +209,12 @@ namespace Plang.Options
                 foreach (var arg in result)
                 {
                     UpdateConfigurationWithParsedArgument(configuration, arg);
+                }
+
+                if (configuration.SchedulingStrategy != StrategyType.MonitorGuidedFeedback &&
+                    result.Any(arg => arg.LongName == MonitorGuidedFeedbackBoundaryOption))
+                {
+                    throw new ArgumentException($"The --{MonitorGuidedFeedbackBoundaryOption} option requires --sch-monitorguidedfeedback.");
                 }
 
                 CreateCompilerConfigIfNecessary(configuration, projectFilePath);
@@ -264,6 +284,9 @@ namespace Plang.Options
 
             switch (option.LongName)
             {
+                case MonitorGuidedFeedbackBoundaryOption:
+                    checkerConfiguration.MonitorGuidedFeedbackBoundary = MonitorGuidedFeedbackBoundaries[(string)option.Value];
+                    break;
                 case "sch-monitorguided-predictor":
                     checkerConfiguration.MonitorGuidedPredictor = ParseMonitorGuidedPredictor((string)option.Value);
                     checkerConfiguration.IsMonitorGuidedPredictorSpecified = true;

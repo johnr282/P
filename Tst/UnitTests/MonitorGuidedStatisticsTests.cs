@@ -39,13 +39,13 @@ public class MonitorGuidedStatisticsTests
     public void LengthDistributionWeightsRepeatedSelectionsAndIncludesEmptyPrefixes()
     {
         var statistics = new MonitorGuidedStatistics();
-        statistics.RecordPrefixSelectedForMutation(8, true);
+        statistics.RecordPrefixSelectedForMutation(8, true, preservedLength: 8);
         Assert.That(statistics.MinSelectedPrefixLength, Is.EqualTo(8));
         Assert.That(statistics.MedianSelectedPrefixLength, Is.EqualTo(8));
-        statistics.RecordPrefixSelectedForMutation(0, false);
+        statistics.RecordPrefixSelectedForMutation(0, false, preservedLength: 0);
         Assert.That(statistics.MedianSelectedPrefixLength, Is.EqualTo(4));
-        statistics.RecordPrefixSelectedForMutation(2, true);
-        statistics.RecordPrefixSelectedForMutation(2, true);
+        statistics.RecordPrefixSelectedForMutation(2, true, preservedLength: 2);
+        statistics.RecordPrefixSelectedForMutation(2, true, preservedLength: 2);
 
         Assert.Multiple(() =>
         {
@@ -58,7 +58,7 @@ public class MonitorGuidedStatisticsTests
             Assert.That(statistics.MedianSelectedPrefixLength, Is.EqualTo(2));
         });
 
-        statistics.RecordPrefixSelectedForMutation(10, true);
+        statistics.RecordPrefixSelectedForMutation(10, true, preservedLength: 10);
         Assert.That(statistics.MeanSelectedPrefixLength, Is.EqualTo(4.4));
         Assert.That(statistics.MedianSelectedPrefixLength, Is.EqualTo(2));
         Assert.That(statistics.MaxSelectedPrefixLength, Is.EqualTo(10));
@@ -68,8 +68,8 @@ public class MonitorGuidedStatisticsTests
     public void LongPrefixesDoNotOverflowMeanOrEvenMedian()
     {
         var statistics = new MonitorGuidedStatistics();
-        statistics.RecordPrefixSelectedForMutation(int.MaxValue, true);
-        statistics.RecordPrefixSelectedForMutation(int.MaxValue - 1, true);
+        statistics.RecordPrefixSelectedForMutation(int.MaxValue, true, preservedLength: int.MaxValue);
+        statistics.RecordPrefixSelectedForMutation(int.MaxValue - 1, true, preservedLength: int.MaxValue - 1);
 
         Assert.That(statistics.MeanSelectedPrefixLength, Is.EqualTo(int.MaxValue - 0.5));
         Assert.That(statistics.MedianSelectedPrefixLength, Is.EqualTo(int.MaxValue - 0.5));
@@ -127,7 +127,7 @@ public class MonitorGuidedStatisticsTests
         var statistics = new MonitorGuidedStatistics();
         statistics.RecordExecution(true);
         statistics.RecordExecution(false, guidanceInvalidationStep: 12);
-        statistics.RecordPrefixSelectedForMutation(4, true);
+        statistics.RecordPrefixSelectedForMutation(4, true, preservedLength: 2);
         statistics.RecordSolverCheck("formula", false);
         statistics.RecordSolverCheck("formula", true);
         statistics.RecordChildPrefixProgress(0);
@@ -143,6 +143,7 @@ public class MonitorGuidedStatisticsTests
         Assert.That(report, Does.Contain("Executions with non-zero violation progress: 1/2 (50.00"));
         Assert.That(report, Does.Contain("Prefixes selected for mutation: 1; with non-zero violation progress: 1 (100.00"));
         Assert.That(report, Does.Contain("min=4, max=4, mean=4.00, median=4.00"));
+        Assert.That(report, Does.Contain("Preserved prefix length: min=2, max=2, mean=2.00, median=2.00"));
         Assert.That(report, Does.Contain("hits=1, misses=1, hit rate=50.00"));
         Assert.That(report, Does.Contain("unique formulas=1"));
         Assert.That(report, Does.Contain("Child prefixes improving on their parent: 1/2 (50.00"));

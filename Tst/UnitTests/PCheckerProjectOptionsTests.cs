@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Xml.Linq;
 using NUnit.Framework;
@@ -11,9 +12,12 @@ namespace UnitTests;
 [TestFixture]
 public class PCheckerProjectOptionsTests
 {
-    [TestCase("--pproj")]
-    [TestCase("-pp")]
-    public void ExplicitProjectSupportsMonitorGuidedFeedbackAndDebugFlags(string projectOption)
+    [TestCase("--pproj", null, MonitorGuidedFeedbackBoundaryMode.RandomExecution)]
+    [TestCase("-pp", "best-prefix", MonitorGuidedFeedbackBoundaryMode.BestPrefix)]
+    [TestCase("--pproj", "random-best-prefix", MonitorGuidedFeedbackBoundaryMode.RandomBestPrefix)]
+    [TestCase("--pproj", "random-execution", MonitorGuidedFeedbackBoundaryMode.RandomExecution)]
+    public void ExplicitProjectSupportsMonitorGuidedFeedbackAndDebugFlags(
+        string projectOption, string boundaryOption, MonitorGuidedFeedbackBoundaryMode expectedBoundary)
     {
         string directory = Path.Combine(Path.GetTempPath(), "p-checker-project-" + Guid.NewGuid().ToString("N"));
         bool previousDebug = Debug.IsEnabled;
@@ -35,13 +39,20 @@ public class PCheckerProjectOptionsTests
             string assembly = Path.Combine(compiled, "Selected.dll");
             File.WriteAllBytes(assembly, Array.Empty<byte>());
 
-            var configuration = new PCheckerOptions().Parse(new[]
+            var arguments = new List<string>
             {
                 projectOption, project, "--testcase", "tcOneLeaderElection1",
                 "--sch-monitorguidedfeedback", "--inbox-type", "eventqueue",
                 "--schedules", "1000", "--debug", "--verbose",
                 "--outdir", Path.Combine(directory, "logs")
-            });
+            };
+            if (boundaryOption != null)
+            {
+                arguments.Add("--sch-monitorguidedfeedback-boundary");
+                arguments.Add(boundaryOption);
+            }
+
+            var configuration = new PCheckerOptions().Parse(arguments.ToArray());
 
             Assert.Multiple(() =>
             {
@@ -51,6 +62,7 @@ public class PCheckerProjectOptionsTests
                 Assert.That(configuration.CompilerConfig.InputPFiles, Does.Contain(source));
                 Assert.That(configuration.TestCaseName, Is.EqualTo("tcOneLeaderElection1"));
                 Assert.That(configuration.SchedulingStrategy, Is.EqualTo(StrategyType.MonitorGuidedFeedback));
+                Assert.That(configuration.MonitorGuidedFeedbackBoundary, Is.EqualTo(expectedBoundary));
                 Assert.That(configuration.InboxType, Is.EqualTo(InboxType.EventQueue));
                 Assert.That(configuration.TestingIterations, Is.EqualTo(1000));
                 Assert.That(configuration.EnableDebugging, Is.True);

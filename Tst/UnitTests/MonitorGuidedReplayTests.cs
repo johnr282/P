@@ -19,9 +19,9 @@ namespace UnitTests;
 public class MonitorGuidedReplayTests
 {
     [Test]
-    public void ChildReconfiguresAfterItsPrefixAndGrandchildReplaysTheEarlierReconfiguration()
+    public void GrandchildCanReplayPastTheBestPrefixAndMutateAtTheSampledCut()
     {
-        const int seed = 17;
+        const int seed = 18;
         // The initial seed's priority is 20/70, so its mutation budget rounds to 64.
         const int initialMutationBudget = 64;
         var configuration = CheckerConfiguration.Create().WithRandomGeneratorSeed(seed);
@@ -32,11 +32,13 @@ public class MonitorGuidedReplayTests
         strategy.ObserveRunningResults(timeline, original);
 
         strategy.PrepareForNextIteration();
+        Assert.That(strategy.Statistics.RootPrefixesExplored, Is.Zero);
         var child = Run(strategy, observeLeader: true);
         var seeds = new Random(seed);
+        Assert.That(seeds.Next(original.Count + 1), Is.EqualTo(1));
         var schedulerRandom = new Random(seeds.Next());
         var inputRandom = new Random(seeds.Next());
-        Assert.That(child[0].ScheduledOperationId, Is.EqualTo((ulong)(schedulerRandom.Next() % 3)));
+        Assert.That(Choice(child[0]), Is.EqualTo(Choice(original[0])));
         Assert.That(child[1].BooleanChoice, Is.EqualTo(inputRandom.Next() % 2 == 0));
         Assert.That(child[2].IntegerChoice, Is.EqualTo(inputRandom.Next()));
         Assert.That(child[3].IntegerChoice, Is.EqualTo(inputRandom.Next()));
@@ -49,15 +51,19 @@ public class MonitorGuidedReplayTests
         {
             strategy.PrepareForNextIteration();
             strategy.ObserveRunningResults(timeline, Run(strategy, observeLeader: false));
+            seeds.Next(original.Count + 1);
             seeds.Next();
             seeds.Next();
         }
 
         strategy.PrepareForNextIteration();
         var grandchild = Run(strategy, observeLeader: true);
-        Assert.That(grandchild.Take(5).Select(Choice), Is.EqualTo(child.Take(5).Select(Choice)));
+        const int cut = 6;
+        Assert.That(seeds.Next(child.Count + 1), Is.EqualTo(cut));
+        Assert.That(grandchild.Take(cut).Select(Choice), Is.EqualTo(child.Take(cut).Select(Choice)));
         seeds.Next();
-        Assert.That(grandchild[5].IntegerChoice, Is.EqualTo(new Random(seeds.Next()).Next()));
+        Assert.That(grandchild[cut].IntegerChoice, Is.EqualTo(new Random(seeds.Next()).Next()));
+        Assert.That(Choice(grandchild[cut]), Is.Not.EqualTo(Choice(child[cut])));
         Assert.DoesNotThrow(() => strategy.ObserveRunningResults(timeline, grandchild));
 
         Assert.Multiple(() =>
@@ -74,6 +80,7 @@ public class MonitorGuidedReplayTests
             Assert.That(strategy.Statistics.MaxSelectedPrefixLength, Is.EqualTo(5));
             Assert.That(strategy.Statistics.MeanSelectedPrefixLength, Is.EqualTo(5.0 / (initialMutationBudget + 1)));
             Assert.That(strategy.Statistics.MedianSelectedPrefixLength, Is.Zero);
+            Assert.That(strategy.Statistics.MaxPreservedPrefixLength, Is.EqualTo(original.Count));
             Assert.That(strategy.Statistics.SolverCacheMisses, Is.EqualTo(1));
             Assert.That(strategy.Statistics.SolverCacheHits, Is.EqualTo(1));
             Assert.That(strategy.Statistics.UniqueSolverFormulas, Is.EqualTo(1));
@@ -91,6 +98,7 @@ public class MonitorGuidedReplayTests
             Assert.That(strategy.Statistics.PrefixesAdmittedForProgressOnly, Is.EqualTo(1));
             Assert.That(strategy.Statistics.PrefixesAdmittedForDiversityAndProgress, Is.Zero);
             Assert.That(strategy.Statistics.RootPrefixes, Is.EqualTo(1));
+            Assert.That(strategy.Statistics.RootPrefixesExplored, Is.EqualTo(1));
             Assert.That(strategy.Statistics.ExecutionsInvalidatingGuidance, Is.Zero);
         });
     }
@@ -119,6 +127,26 @@ public class MonitorGuidedReplayTests
             Assert.That(strategy.Statistics.RootPrefixes, Is.Zero);
             Assert.That(strategy.Statistics.ExecutionsInvalidatingGuidance, Is.Zero);
         });
+    }
+
+    [TestCase(MonitorGuidedFeedbackBoundaryMode.BestPrefix, 5)]
+    [TestCase(MonitorGuidedFeedbackBoundaryMode.RandomBestPrefix, 3)]
+    public void BoundaryModePreservesTheRequestedPartOfTheBestPrefix(
+        MonitorGuidedFeedbackBoundaryMode mode, int expectedCut)
+    {
+        var configuration = CheckerConfiguration.Create().WithRandomGeneratorSeed(17);
+        configuration.MonitorGuidedFeedbackBoundary = mode;
+        var strategy = new MonitorGuidedFeedbackStrategy(configuration, CreateMonitorAst());
+        var timeline = new TimelineObserver();
+        var parent = Run(strategy, observeLeader: true);
+        strategy.ObserveRunningResults(timeline, parent);
+
+        strategy.PrepareForNextIteration();
+        var child = Run(strategy, observeLeader: true);
+
+        Assert.That(strategy.Statistics.MaxPreservedPrefixLength, Is.EqualTo(expectedCut));
+        Assert.That(child.Take(expectedCut).Select(Choice), Is.EqualTo(parent.Take(expectedCut).Select(Choice)));
+        Assert.DoesNotThrow(() => strategy.ObserveRunningResults(timeline, child));
     }
 
     [Test]
@@ -285,6 +313,8 @@ public class MonitorGuidedReplayTests
             Observe(strategy, choice, trace.Count, 7);
         }
 
+        strategy.GetNextIntegerChoice(choice, int.MaxValue, out randomInteger);
+        trace.AddNondeterministicIntegerChoice(randomInteger);
         strategy.GetNextIntegerChoice(choice, int.MaxValue, out randomInteger);
         trace.AddNondeterministicIntegerChoice(randomInteger);
         return trace;
