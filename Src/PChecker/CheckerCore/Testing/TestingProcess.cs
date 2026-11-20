@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text.Json;
 using System.Threading.Tasks;
 using PChecker.Configuration;
 using PChecker.IO.Debugging;
@@ -225,6 +226,10 @@ namespace PChecker.Testing
                 Console.WriteLine($"..... Writing {statisticsPath}");
                 using var statisticsWriter = new StreamWriter(statisticsPath);
                 monitorGuidedFeedback.DumpStats(statisticsWriter);
+
+                var jsonPath = Path.ChangeExtension(statisticsPath, ".json");
+                Console.WriteLine($"..... Writing {jsonPath}");
+                File.WriteAllText(jsonPath, JsonSerializer.Serialize(monitorGuidedFeedback.Statistics));
             }
 
             Console.WriteLine($"... Elapsed {Profiler.GetElapsedTime()} sec.");
