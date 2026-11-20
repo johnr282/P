@@ -48,6 +48,12 @@ namespace PChecker.SystematicTesting
         public int NumOfFoundBugs { get; internal set; }
 
         /// <summary>
+        /// Number of recorded choices in the first schedule that found a bug.
+        /// </summary>
+        [DataMember]
+        public int? FirstViolatingScheduleLength { get; internal set; }
+
+        /// <summary>
         /// Set of unique bug reports.
         /// </summary>
         [DataMember]
@@ -158,6 +164,7 @@ namespace PChecker.SystematicTesting
                 ExploredTimelines.UnionWith(testReport.ExploredTimelines);
 
                 NumOfFoundBugs += testReport.NumOfFoundBugs;
+                FirstViolatingScheduleLength ??= testReport.FirstViolatingScheduleLength;
 
                 BugReports.UnionWith(testReport.BugReports);
 
@@ -209,6 +216,12 @@ namespace PChecker.SystematicTesting
             report.AppendLine();
 
             report.AppendFormat($"memory_max_mb:{Profiler.GetMaxMemoryUsage():0.##}");
+
+            if (FirstViolatingScheduleLength is int violatingScheduleLength)
+            {
+                report.AppendLine();
+                report.AppendFormat("violating_schedule_length:{0}", violatingScheduleLength);
+            }
 
             return report.ToString();
         }

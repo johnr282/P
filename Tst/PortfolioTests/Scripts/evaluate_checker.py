@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run five P Checker configurations and summarize time to first bug."""
+"""Run P Checker evaluations for the configured benchmarks."""
 
 import argparse
 import json
@@ -9,13 +9,63 @@ import subprocess
 import sys
 import time
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_FILE = REPO_ROOT / "Src" / "PCompiler" / "PCommandLine" / "PCommandLine.csproj"
+BENCHMARK_ROOT = Path("/home/johnr/purdue/research/mgs/p-benchmark")
 MUTATION_BOUNDARY_POLICIES = ("best-prefix", "random-best-prefix", "random-execution")
+
+
+@dataclass(frozen=True)
+class Benchmark:
+    directory: Path
+    project: str
+    project_dll: str
+    test_case: str
+
+
+BENCHMARKS = {
+    "leader-election": Benchmark(
+        directory=BENCHMARK_ROOT / "leader-election",
+        project="LeaderElection-Unreliable-Nondeterministic.pproj",
+        project_dll=(
+            "PGenerated/LeaderElection/UnreliableNondeterministic/PChecker/net8.0/"
+            "LeaderElectionUnreliableNetworkNondeterministicTimer.dll"
+        ),
+        test_case="tcOneLeaderElection1",
+    ),
+    "mutual-exclusion": Benchmark(
+        directory=BENCHMARK_ROOT / "mutual-exclusion",
+        project="MutualExclusion-Unreliable-Nondeterministic.pproj",
+        project_dll=(
+            "PGenerated/MutualExclusion/UnreliableNondeterministic/PChecker/net8.0/"
+            "MutualExclusionUnreliableNetworkNondeterministicTimer.dll"
+        ),
+        test_case="tcMultipleRequests",
+    ),
+    "two-phase-commit": Benchmark(
+        directory=BENCHMARK_ROOT / "two-phase-commit",
+        project="TwoPhaseCommit-Unreliable-Nondeterministic.pproj",
+        project_dll=(
+            "PGenerated/TwoPhaseCommit/UnreliableNondeterministic/PChecker/net8.0/"
+            "TwoPhaseCommitUnreliableNetworkNondeterministicTimer.dll"
+        ),
+        test_case="tcMultipleClientsNoFailureAtomicity",
+    ),
+    "single-decree-paxos": Benchmark(
+        directory=BENCHMARK_ROOT / "single-decree-paxos",
+        project="SingleDecreePaxos-Unreliable-Nondeterministic.pproj",
+        project_dll=(
+            "PGenerated/UnreliableNondeterministic/PChecker/net8.0/"
+            "SingleDecreePaxosUnreliableNetworkNondeterministicTimer.dll"
+        ),
+        test_case="testBasicPaxos3on1",
+    ),
+}
 
 
 def parse_summary(path: Path) -> dict[str, float]:
@@ -119,38 +169,41 @@ def summarize_monitor_statistics(policy: str, reports: list[dict[str, float]], r
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dll", type=Path, required=True,
-                        help="Path to the compiled P test DLL")
-    parser.add_argument("--pproj", type=Path,
-                        help="P project file for monitor analysis (defaults to discovery in --output-parent)")
     parser.add_argument("--output-parent", type=Path, required=True,
-                        help="Directory for timestamped evaluations under PCheckerOutput")
-    parser.add_argument("--test-case", required=True,
-                        help="P test case name, for example tcOneLeaderElection1")
+                        help="Parent directory for timestamped evaluation results")
+    parser.add_argument("--benchmark", choices=BENCHMARKS,
+                        help="Run only this benchmark (default: run all benchmarks)")
     parser.add_argument("--runs", type=int, default=1,
                         help="Number of runs per configuration (default: 1)")
     parser.add_argument("--timeout", type=int, required=True,
                         help="Per-run timeout in seconds")
-    parser.add_argument("--schedules", type=int, required=True,
+    parser.add_argument("--schedules", type=int,
                         help="Schedules per run")
-    parser.add_argument("--max-steps", type=int, required=True,
+    parser.add_argument("--max-steps", type=int,
                         help="Maximum steps per schedule")
     args = parser.parse_args()
 
-    dll = args.dll.expanduser().resolve()
     output_parent = args.output_parent.expanduser().resolve()
-    project_args = []
-    if args.pproj is not None:
-        pproj = args.pproj.expanduser().resolve()
-        if not pproj.is_file():
-            parser.error(f"P project file does not exist: {pproj}")
-        project_args = ["--pproj", str(pproj)]
-    if not dll.is_file():
-        parser.error(f"DLL does not exist: {dll}")
+    benchmark_names = (args.benchmark,) if args.benchmark is not None else tuple(BENCHMARKS)
+    for name in benchmark_names:
+        benchmark = BENCHMARKS[name]
+        project = benchmark.directory / benchmark.project
+        dll = benchmark.directory / benchmark.project_dll
+        if not project.is_file():
+            parser.error(f"{name} project file does not exist: {project}")
+        if not dll.is_file():
+            parser.error(f"{name} DLL does not exist: {dll}")
     if not PROJECT_FILE.is_file():
         parser.error(f"P source project not found: {PROJECT_FILE}")
-    if args.runs < 1 or args.timeout < 1 or args.schedules < 1 or args.max_steps < 1:
-        parser.error("runs, timeout, schedules, and max_steps must all be positive")
+    if args.runs < 1 or args.timeout < 1:
+        parser.error("runs and timeout must both be positive")
+
+    exploration_args = []
+    for option, value in (("--schedules", args.schedules), ("--max-steps", args.max_steps)):
+        if value is not None:
+            if value < 1:
+                parser.error(f"{option} must be positive")
+            exploration_args.extend([option, str(value)])
 
     # Build once from this checkout. Subsequent executions use the built source output.
     build = subprocess.run(
@@ -161,10 +214,33 @@ def main() -> int:
         return build.returncode
 
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
-    evaluation_dir = output_parent / "PCheckerOutput" / timestamp
+    evaluation_dir = output_parent / f"evaluation-results-{timestamp}"
     evaluation_dir.mkdir(parents=True, exist_ok=False)
     print(f"Evaluation directory: {evaluation_dir}")
 
+    exit_code = 0
+    for name in benchmark_names:
+        print(f"\nBenchmark: {name}")
+        benchmark_output = evaluation_dir / name
+        benchmark_output.mkdir()
+        result = evaluate_benchmark(
+            BENCHMARKS[name], benchmark_output, args.runs, args.timeout, exploration_args,
+        )
+        if result:
+            print(f"Benchmark {name} failed (exit {result})", file=sys.stderr)
+            exit_code = exit_code or result
+    return exit_code
+
+
+def evaluate_benchmark(
+    benchmark: Benchmark,
+    benchmark_output: Path,
+    runs: int,
+    timeout: int,
+    exploration_args: Sequence[str],
+) -> int:
+    dll = benchmark.directory / benchmark.project_dll
+    project = benchmark.directory / benchmark.project
     strategies = [
         ("random", ["--sch-random"], None),
         ("fest-random", ["--sch-feedback"], None),
@@ -183,39 +259,39 @@ def main() -> int:
     for strategy_name, strategy_args, policy in strategies:
         bug_schedules: list[float] = []
         bug_times: list[float] = []
+        violating_schedule_lengths: list[float] = []
         schedule_rates: list[float] = []
         timelines_explored: list[int] = []
         never_found = 0
         monitor_reports: list[dict[str, float]] = []
-        print(f"\n{strategy_name}: {args.runs} runs")
-        for run_index in range(1, args.runs + 1):
+        print(f"\n{strategy_name}: {runs} runs")
+        for run_index in range(1, runs + 1):
             run_label = f"{strategy_name} run {run_index}"
             started_at = time.time()
             # Give each invocation its own output folder. P Checker rotates
             # up to ten prior runs when reusing an output directory; isolated
             # folders avoid that history management and preserve every run.
-            run_output = evaluation_dir / strategy_name / f"run_{run_index:03d}"
+            run_output = benchmark_output / strategy_name / f"run_{run_index:03d}"
             command = [
                 "dotnet", "run", "--project", str(PROJECT_FILE),
                 "--configuration", "Release", "--no-build", "--no-launch-profile",
                 "--", "check", str(dll),
-                "-tc", args.test_case,
-                "--timeout", str(args.timeout),
-                "-s", str(args.schedules),
-                "-ms", str(args.max_steps),
+                "-tc", benchmark.test_case,
+                "--timeout", str(timeout),
+                *exploration_args,
                 "--inbox-type", "eventset",
                 "--outdir", str(run_output),
-                *project_args,
+                "--pproj", str(project),
                 *strategy_args,
             ]
             try:
                 result = subprocess.run(
-                    command, cwd=output_parent, text=True,
+                    command, cwd=benchmark.directory, text=True,
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    timeout=args.timeout + 30,
+                    timeout=timeout + 30,
                 )
             except subprocess.TimeoutExpired as exc:
-                print(f"{run_label} exceeded {args.timeout + 30}s wall limit.", file=sys.stderr)
+                print(f"{run_label} exceeded {timeout + 30}s wall limit.", file=sys.stderr)
                 if exc.stdout:
                     output = exc.stdout if isinstance(exc.stdout, str) else exc.stdout.decode(errors="replace")
                     print(output, file=sys.stderr)
@@ -223,6 +299,8 @@ def main() -> int:
             try:
                 summary_file = newest_summary(run_output, started_at)
                 summary = parse_summary(summary_file)
+                if summary["bugs"] > 0 and "violating_schedule_length" not in summary:
+                    raise ValueError(f"{summary_file} is missing violating_schedule_length")
             except (FileNotFoundError, ValueError) as exc:
                 print(f"{run_label}: {exc}\nChecker output:\n{result.stdout}", file=sys.stderr)
                 return 2
@@ -247,6 +325,7 @@ def main() -> int:
             if summary["bugs"] > 0:
                 bug_schedules.append(summary["schedules"])
                 bug_times.append(summary["time_seconds"])
+                violating_schedule_lengths.append(summary["violating_schedule_length"])
                 status = "bug found"
             else:
                 never_found += 1
@@ -257,7 +336,8 @@ def main() -> int:
         strategy_summary = [
             summarize("Schedules to find a bug", bug_schedules),
             summarize("Time to find a bug (seconds)", bug_times),
-            f"  Runs that never found a bug: {never_found}/{args.runs}",
+            summarize("Violating schedule length (steps)", violating_schedule_lengths),
+            f"  Runs that never found a bug: {never_found}/{runs}",
             summarize("Schedules/sec", schedule_rates),
             summarize("Timelines explored", timelines_explored),
         ]
@@ -265,14 +345,14 @@ def main() -> int:
         report_lines.extend(["", f"{strategy_name}:", *strategy_summary])
 
         if policy is not None:
-            monitor_summary = summarize_monitor_statistics(policy, monitor_reports, args.runs)
-            monitor_summary_path = evaluation_dir / f"{strategy_name}_monitor_guided_statistics.txt"
+            monitor_summary = summarize_monitor_statistics(policy, monitor_reports, runs)
+            monitor_summary_path = benchmark_output / f"{strategy_name}_monitor_guided_statistics.txt"
             monitor_summary_path.write_text(monitor_summary, encoding="utf-8")
             print(f"Monitor-guided statistics summary written to {monitor_summary_path}")
 
     report = "\n".join(report_lines) + "\n"
     print(f"\n{report}", end="")
-    summary_path = evaluation_dir / "evaluation_summary.txt"
+    summary_path = benchmark_output / "evaluation_summary.txt"
     summary_path.write_text(report, encoding="utf-8")
     print(f"\nSummary written to {summary_path}")
     return 0

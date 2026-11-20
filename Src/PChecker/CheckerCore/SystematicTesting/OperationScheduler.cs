@@ -610,6 +610,7 @@ namespace PChecker.SystematicTesting
             {
                 report.NumOfFoundBugs++;
                 report.BugReports.Add(BugReport);
+                report.FirstViolatingScheduleLength = ScheduleTrace.Count;
             }
 
             if (Strategy.IsFair())
