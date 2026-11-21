@@ -205,11 +205,7 @@ namespace Plang.Parser
         /// <returns>If present returns the passed directory path, else the current directory</returns>
         private DirectoryInfo GetOutputDirectory(FileInfo fullPathName)
         {
-            var projectXml = XElement.Load(fullPathName.FullName);
-            var outputDir = projectXml.Element("OutputDir")?.Value;
-            if (!string.IsNullOrWhiteSpace(outputDir))
-                return Directory.CreateDirectory(outputDir);
-            return new DirectoryInfo(Directory.GetCurrentDirectory());
+            return Directory.CreateDirectory(GetOutputDirectoryName(fullPathName));
         }
 
         /// <summary>
@@ -222,7 +218,7 @@ namespace Plang.Parser
             var projectXml = XElement.Load(fullPathName.FullName);
             var outputDir = projectXml.Element("OutputDir")?.Value;
             if (!string.IsNullOrWhiteSpace(outputDir))
-                return outputDir;
+                return Path.GetFullPath(outputDir, fullPathName.DirectoryName);
             return Directory.GetCurrentDirectory();
         }
 

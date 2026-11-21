@@ -80,6 +80,12 @@ internal sealed class MonitorGuidedFeedbackStrategy : FeedbackGuidedStrategy
             case "Mutex":
                 _monitorAnalyzer.GetMutexMonitorGuidance(out _initialGuidance);
                 break;
+            case "AtomicityInvariant":
+                _monitorAnalyzer.GetAtomicityMonitorGuidance(out _initialGuidance);
+                break;
+            case "OneValueTaught":
+                _monitorAnalyzer.GetOneValueTaughtMonitorGuidance(out _initialGuidance);
+                break;
             default:
                 throw new PInternalException("Unsupported monitor");
         }
