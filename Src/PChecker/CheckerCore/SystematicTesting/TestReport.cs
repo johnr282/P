@@ -209,6 +209,9 @@ namespace PChecker.SystematicTesting
             report.AppendFormat("schedules:{0}", totalExploredSchedules);
             report.AppendLine();
 
+            report.AppendFormat("timelines_explored:{0}", ExploredTimelines.Count);
+            report.AppendLine();
+
             report.AppendFormat("max_depth:{0}", MaxExploredFairSteps < 0 ? 0 : MaxExploredFairSteps);
             report.AppendLine();
 
