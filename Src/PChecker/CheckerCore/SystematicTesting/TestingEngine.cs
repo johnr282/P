@@ -260,7 +260,7 @@ namespace PChecker.SystematicTesting
             {
                 case StrategyType.Random:
                     Strategy = new RandomStrategy(
-                        checkerConfiguration.MaxFairSchedulingSteps, 
+                        checkerConfiguration.MaxUnfairSchedulingSteps,
                         RandomValueGenerator);
                     break;
                 case StrategyType.Probabilistic:

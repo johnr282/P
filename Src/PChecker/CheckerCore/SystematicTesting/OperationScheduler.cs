@@ -629,7 +629,8 @@ namespace PChecker.SystematicTesting
                     report.MaxExploredFairSteps = ScheduledSteps;
                 }
 
-                if (Strategy.HasReachedMaxSchedulingSteps())
+                if (CheckerConfiguration.MaxFairSchedulingSteps > 0 &&
+                    ScheduledSteps >= CheckerConfiguration.MaxFairSchedulingSteps)
                 {
                     report.MaxFairStepsHitInFairTests++;
                 }
@@ -773,9 +774,7 @@ namespace PChecker.SystematicTesting
         {
             if (Strategy.HasReachedMaxSchedulingSteps())
             {
-                var bound = Strategy.IsFair() ? CheckerConfiguration.MaxFairSchedulingSteps :
-                    CheckerConfiguration.MaxUnfairSchedulingSteps;
-                var message = $"Scheduling steps bound of {bound} reached.";
+                var message = $"Scheduling steps bound of {ScheduledSteps} reached.";
 
                 if (CheckerConfiguration.ConsiderDepthBoundHitAsBug)
                 {
