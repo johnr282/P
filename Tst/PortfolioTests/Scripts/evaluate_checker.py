@@ -19,6 +19,7 @@ PROJECT_FILE = REPO_ROOT / "Src" / "PCompiler" / "PCommandLine" / "PCommandLine.
 BENCHMARK_ROOT = Path("/home/johnr/purdue/research/mgs/p-benchmark")
 MUTATION_BOUNDARY_POLICIES = ("best-prefix", "random-best-prefix", "random-execution")
 TIMELINES_PER_SCHEDULE = "Timelines / schedules"
+STATISTICS = {"Mean": statistics.mean, "Median": statistics.median}
 
 
 @dataclass(frozen=True)
@@ -128,8 +129,7 @@ def summarize(label: str, values: Sequence[float]) -> str:
 class StrategyResult:
     hits: int
     runs: int
-    means: dict[str, float | None]
-    timelines_per_schedule: float | None = None
+    metrics: dict[str, dict[str, float | None]]
 
 
 def format_table(rows: list[list[str]]) -> list[str]:
@@ -138,28 +138,53 @@ def format_table(rows: list[list[str]]) -> list[str]:
             for row in rows]
 
 
+def format_metric_table(labels: list[str], metrics: list[str], rows: list[list[str]]) -> list[str]:
+    headers = labels + list(STATISTICS) * len(metrics)
+    widths = [max(map(len, column)) for column in zip(headers, *rows, strict=True)]
+    group_titles = [" " * width for width in widths[:len(labels)]]
+    starts = range(len(labels), len(headers), 2)
+    for metric, start in zip(metrics, starts, strict=True):
+        group_width = widths[start] + 2 + widths[start + 1]
+        extra = max(0, len(metric) - group_width)
+        widths[start] += extra // 2
+        widths[start + 1] += extra - extra // 2
+        group_titles.append(metric.center(group_width + extra))
+
+    def format_row(row: list[str]) -> str:
+        cells = [cell.ljust(width) for cell, width in zip(row[:len(labels)], widths)]
+        for start in starts:
+            cells.append(f"{row[start]:>{widths[start]}}  {row[start + 1]:>{widths[start + 1]}}")
+        return " │ ".join(cells).rstrip()
+
+    divider = "─┼─".join("─" * len(title) for title in group_titles)
+    return [" │ ".join(group_titles).rstrip(), format_row(headers), divider, *map(format_row, rows)]
+
+
 def comparison_table(results: dict[str, StrategyResult]) -> list[str]:
-    rows = [["Strategy", "Missed runs", *results["random"].means, TIMELINES_PER_SCHEDULE]]
+    metrics = list(results["random"].metrics)
+    rows = []
     for name, result in results.items():
         cells = [name, f"{result.runs - result.hits}/{result.runs}"]
-        for metric, value in result.means.items():
-            baseline = results["random"].means[metric]
-            if value is None:
-                cells.append("—")
-                continue
-            cell = f"{value:.3f}".rstrip("0").rstrip(".")
-            if name != "random":
-                cell += " (—)" if baseline in (None, 0) else f" ({value / baseline:.2f}x)"
-            cells.append(cell)
-        share = result.timelines_per_schedule
-        cells.append(f"{share:.2%}" if share is not None else "—")
+        for metric in metrics:
+            for stat in STATISTICS:
+                value = result.metrics[metric][stat]
+                if value is None:
+                    cells.append("—")
+                elif metric == TIMELINES_PER_SCHEDULE:
+                    cells.append(f"{value:.2%}")
+                else:
+                    cell = f"{value:.3f}".rstrip("0").rstrip(".")
+                    baseline = results["random"].metrics[metric][stat]
+                    if name != "random":
+                        cell += " (—)" if baseline in (None, 0) else f" ({value / baseline:.2f}x)"
+                    cells.append(cell)
         rows.append(cells)
 
-    lines = ["Strategy comparison (means; multiplier = strategy / random)",
+    lines = ["Strategy comparison (multipliers compare the same statistic with random)",
              "Schedules to bug, seconds to bug, and violating steps use bug-finding runs only.",
-             "Timelines / schedules averages each run's distinct timeline count divided by its schedule count, excluding zero-schedule runs.",
+             "Timelines / schedules uses each run's distinct timeline count divided by its schedule count, excluding zero-schedule runs.",
              "— indicates an unavailable value or multiplier.", ""]
-    return lines + format_table(rows)
+    return lines + format_metric_table(["Strategy", "Missed runs"], metrics, rows)
 
 
 def aggregate_summary(benchmarks: dict[str, dict[str, StrategyResult]]) -> list[str]:
@@ -167,7 +192,7 @@ def aggregate_summary(benchmarks: dict[str, dict[str, StrategyResult]]) -> list[
         return ["No benchmarks completed."]
 
     first = next(iter(benchmarks.values()))
-    metrics = first["random"].means
+    metrics = list(first["random"].metrics)
     count = len(benchmarks)
     hit_rows = [["Benchmark", *first]]
     for benchmark, results in benchmarks.items():
@@ -177,7 +202,7 @@ def aggregate_summary(benchmarks: dict[str, dict[str, StrategyResult]]) -> list[
         name: statistics.mean(results[name].hits / results[name].runs for results in benchmarks.values())
         for name in first
     }
-    rows = [["Strategy", "Bug-finding rate", "Benchmarks hit", *metrics, TIMELINES_PER_SCHEDULE]]
+    rows = []
     for name, rate in rates.items():
         rate_cell = f"{rate:.2%}".rstrip("%").rstrip("0").rstrip(".") + "%"
         if name != "random":
@@ -187,27 +212,30 @@ def aggregate_summary(benchmarks: dict[str, dict[str, StrategyResult]]) -> list[
         hits = sum(results[name].hits > 0 for results in benchmarks.values())
         cells = [name, rate_cell, f"{hits}/{count}"]
         for metric in metrics:
-            ratios = []
-            for results in benchmarks.values():
-                value = results[name].means[metric]
-                baseline = results["random"].means[metric]
-                if value is not None and value > 0 and baseline is not None and baseline > 0:
-                    ratios.append(value / baseline)
-            multiplier = f"{statistics.geometric_mean(ratios):.2f}x" if ratios else "—"
-            cells.append(f"{multiplier} ({len(ratios)}/{count})")
-        shares = [results[name].timelines_per_schedule for results in benchmarks.values()
-                  if results[name].timelines_per_schedule is not None]
-        percentage = f"{statistics.mean(shares):.2%}" if shares else "—"
-        cells.append(f"{percentage} ({len(shares)}/{count})")
+            for stat in STATISTICS:
+                if metric == TIMELINES_PER_SCHEDULE:
+                    shares = [results[name].metrics[metric][stat] for results in benchmarks.values()]
+                    values = [share for share in shares if share is not None]
+                    cell = f"{statistics.mean(values):.2%}" if values else "—"
+                else:
+                    values = []
+                    for results in benchmarks.values():
+                        value = results[name].metrics[metric][stat]
+                        baseline = results["random"].metrics[metric][stat]
+                        if value is not None and value > 0 and baseline is not None and baseline > 0:
+                            values.append(value / baseline)
+                    cell = f"{statistics.geometric_mean(values):.2f}x" if values else "—"
+                cells.append(f"{cell} ({len(values)}/{count})")
         rows.append(cells)
 
     return [
         "Aggregate strategy comparison",
         "Bug-finding rate averages benchmark hit rates equally. Parentheses show the rate minus random's rate.",
-        "Multipliers are geometric means of strategy/random ratios from benchmarks with positive means for both.",
+        "Mean and Median multipliers are geometric means of the corresponding per-benchmark strategy/random ratios. Both values must be positive.",
         "Each multiplier includes its contributing benchmark count. Schedules to bug, seconds to bug, and violating steps use only runs that found a bug.",
-        "Timelines / schedules averages the per-run percentages within each benchmark, then weights contributing benchmarks equally. Zero-schedule runs are excluded.",
-        "", *format_table(rows), "", "Runs that found a bug / completed runs", "", *format_table(hit_rows),
+        "Timelines / schedules shows the equally weighted averages of benchmark means and benchmark medians. Zero-schedule runs are excluded.",
+        "", *format_metric_table(["Strategy", "Bug-finding rate", "Benchmarks hit"], metrics, rows),
+        "", "Runs that found a bug / completed runs", "", *format_table(hit_rows),
     ]
 
 
@@ -469,10 +497,13 @@ def evaluate_benchmark(
             "Violating steps": violating_schedule_lengths,
             "Schedules/sec": schedule_rates,
             "Timelines explored": timelines_explored,
+            TIMELINES_PER_SCHEDULE: timeline_shares,
         }
-        means = {metric: statistics.mean(values) if values else None for metric, values in metrics.items()}
-        share = statistics.mean(timeline_shares) if timeline_shares else None
-        results[display_name] = StrategyResult(runs - never_found, runs, means, share)
+        summaries = {
+            metric: {stat: calculate(values) if values else None for stat, calculate in STATISTICS.items()}
+            for metric, values in metrics.items()
+        }
+        results[display_name] = StrategyResult(runs - never_found, runs, summaries)
         report_lines.extend(["", f"{display_name}:", *strategy_summary])
 
         if policy is not None:
